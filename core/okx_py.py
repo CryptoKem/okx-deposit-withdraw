@@ -23,9 +23,6 @@ class OKX:
         self.account = account
         self._chains: Optional[list[str]] = None
 
-        if not any([config.okx_api_key_main, config.okx_secret_key_main, config.okx_passphrase_main]):
-            logger.warning(f"{self.account.profile_number} Не указаны ключи для работы с OKX, запускаем работу без них")
-            return
 
         self.funding_api = Funding.FundingAPI(
             config.okx_api_key_main,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import random
-import time
 from typing import Optional, Literal
 
 import requests
@@ -327,7 +326,7 @@ class Ads:
         Кликает по элементу, если он существует, можно передать локатор или метод поиска и имя элемента
         :param locator: локатор элемента
         :param method: метод поиска элемента
-        :param name: value для поиска элемента, если role, в формате "role:name"
+        :param value: value для поиска элемента, если role, в формате "role:name"
         :return:
         """
         if not locator:
@@ -409,3 +408,31 @@ class Ads:
         print(indent + frame.name + '@' + frame.url)
         for child in frame.child_frames:
             self._dump_frame_tree(child, indent + "    ")
+
+    def get_browser_offsets(self):
+        """
+        Получает смещение окна браузера относительно экрана
+        :return: смещение окна браузера
+        """
+
+        self.page.bring_to_front()
+
+
+        browser_offsets = self.page.evaluate(
+            """() => ({
+                x: window.screenX,
+                y: window.screenY
+            })"""
+        )
+
+        header_height = self.page.evaluate(
+            """() => window.outerHeight - window.innerHeight"""
+        )
+
+        viewport_offsets = {
+            "x": browser_offsets['x'],
+            "y": browser_offsets['y'] + header_height
+        }
+
+        return viewport_offsets
+

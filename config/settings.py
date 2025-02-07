@@ -3,10 +3,9 @@ import os
 from dotenv import load_dotenv
 
 from config.chains import Chains
-from models.patterns import Singleton
 
 
-class Config(Singleton):
+class Config:
     load_dotenv()  # загрузка переменных окружения из файла .env
 
     # скорость задержки между действиями в браузере в миллисекундах
@@ -40,6 +39,9 @@ class Config(Singleton):
     # okx прокси, укажите прокси для работы с биржей okx, если вы находитесь в РФ
     okx_proxy = None  # формат 'ip:port:login:password'
 
+    # binance прокси, укажите прокси для работы с биржей binance, если вы находитесь в РФ
+    binance_proxy = None  # формат 'ip:port:login:password'
+
     # нужно ли устанавливать прокси в профиль ADS
     set_proxy = False  # формат ip:port:login:password
     # нужно ли проверять прокси перед использованием
@@ -69,6 +71,9 @@ class Config(Singleton):
     okx_api_key_main = os.getenv("OKX_API_KEY_MAIN")
     okx_secret_key_main = os.getenv("OKX_SECRET_KEY_MAIN")
     okx_passphrase_main = os.getenv("OKX_PASSPHRASE_MAIN")
+
+    binance_api_key = os.getenv("BINANCE_API_KEY")
+    binance_secret_key = os.getenv("BINANCE_SECRET_KEY")
 
     PATH_CONFIG = os.path.join(os.getcwd(), 'config')
     PATH_DATA = os.path.join(PATH_CONFIG, "data")

@@ -1,6 +1,5 @@
 import datetime
-import random
-import time
+
 from loguru import logger
 
 from config import config, Chains, Tokens
@@ -19,6 +18,12 @@ def main():
     init_logger()
     # Получаем список аккаунтов из файлов
     accounts = get_accounts()
+
+    if not any([config.okx_api_key_main, config.okx_secret_key_main, config.okx_passphrase_main]):
+        logger.warning("Не указаны ключи для работы с OKX, не будут работать методы OKX")
+
+    if not any([config.binance_api_key, config.binance_secret_key]):
+        logger.warning("Не указаны ключи для работы с Binance, не будут работать методы Binance")
 
     # перебираем профили в цикле
     for i in range(config.cycle):
@@ -55,7 +60,7 @@ def worker(account: Account) -> None:
             activity(bot)
             # сюда по необходимости добавляем другие функции с активностями
     except Exception as e:
-        logger.critical(f"Ошибка при инициализации Bot: {e}")
+        logger.critical(f"{account.profile_number} Ошибка при инициализации Bot: {e}")
 
 
 def schedule_and_filter(accounts: list[Account]) -> list[Account]:
@@ -66,6 +71,7 @@ def schedule_and_filter(accounts: list[Account]) -> list[Account]:
     :param accounts: список аккаунтов
     :return: список аккаунтов для работы
     """
+
 
     # если фильтрация аккаунтов не включена, возвращаем все аккаунты
     if not config.is_schedule:
@@ -128,9 +134,6 @@ def activity(bot: Bot):
     :return: None
     """
     bot.ads.open_url('google.com')
-    pass
-
-
 
 if __name__ == '__main__':
     try:

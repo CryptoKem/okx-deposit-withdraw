@@ -25,7 +25,8 @@ class Chain:
             metamask_name: Optional[str] = None,
             tx_type: int = 2,
             native_token: str = 'ETH',
-            okx_name: Optional[str] = None
+            okx_name: Optional[str] = None,
+            binance_name: Optional[str] = None,
     ):
         self.name = name
         self.rpc = rpc
@@ -34,6 +35,7 @@ class Chain:
         self.tx_type = tx_type
         self.native_token = native_token
         self.okx_name = okx_name
+        self.binance_name = binance_name
 
     def __str__(self):
         return self.rpc

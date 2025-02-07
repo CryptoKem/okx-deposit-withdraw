@@ -1,7 +1,8 @@
 from loguru import logger
 from playwright.sync_api import Locator
 
-from core.ads.ads import Ads
+from core.browser.ads import Ads
+from core.excel import Excel
 from config import config
 from models.account import Account
 from models.chain import Chain
@@ -12,11 +13,12 @@ class Metamask:
     Класс для работы с metamask v. 12.9.3
     """
 
-    def __init__(self, ads: Ads, account: Account):
+    def __init__(self, ads: Ads, account: Account, excel: Excel) -> None:
         self._url = config.metamask_url
         self.ads = ads
         self.password = account.password
         self.seed = account.seed
+        self.excel = excel
 
     def open_metamask(self):
         """
@@ -26,9 +28,10 @@ class Metamask:
         self.ads.open_url(self._url)
         random_sleep(3, 4)
 
-    def create_wallet(self) -> tuple[str, str, str]:
+    def create_wallet(self, save_in_excel: bool = False) -> tuple[str, str, str]:
         """
         Создает кошелек в metamask, возвращает адрес кошелька, seed фразу и пароль в виде кортежа.
+        :param safe_in_excel: если True, то адрес, seed и пароль будут записаны в excel файл
         :return: tuple (address, seed, password)
         """
         self.open_metamask()
@@ -73,6 +76,11 @@ class Metamask:
         address = self.get_address()
 
         seed_str = " ".join(seed)
+
+        if save_in_excel:
+            self.excel.set_cell('Address', address)
+            self.excel.set_cell('Seed', seed_str)
+            self.excel.set_cell('Password', self.password)
 
         return address, seed_str, self.password
 
@@ -239,6 +247,7 @@ class Metamask:
         if enabled_networks.get_by_text(chain.metamask_name, exact=True).count():
             enabled_networks.get_by_text(chain.metamask_name, exact=True).click()
         else:
+            # todo: исправить баг нажатия на кнопку закрыть
             close_button = self.ads.page.get_by_role('button', name='Close').or_(self.ads.page.get_by_role('button', name='Закрыть'))
             close_button.first.click()
             self.set_chain(chain)

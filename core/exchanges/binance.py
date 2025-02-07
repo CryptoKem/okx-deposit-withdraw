@@ -1,0 +1,194 @@
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import time
+from typing import Optional
+
+import requests
+from requests import RequestException
+
+from config import config
+
+from loguru import logger
+
+from core.exchanges.abs_exchange import AbsExchange
+from models.account import Account
+from models.amount import Amount
+from models.chain import Chain
+from models.token import Token
+from utils.utils import random_sleep, prepare_proxy_requests
+
+
+class Binance(AbsExchange):
+    """
+    Класс для работы с биржей Binance.
+    """
+
+    def __init__(self, account: Account) -> None:
+
+        self.account = account
+        self._endpoint = 'https://api.binance.com'
+        self._proxies = prepare_proxy_requests(config.binance_proxy)
+        self._headers = {
+            'X-MBX-APIKEY': config.binance_api_key
+        }
+
+    def _sign_params(self, params: dict):
+        """
+        Подписывает запрос к binance в исходном словаре
+        :param params: словарь параметров
+        :return: None
+        """
+        params['timestamp'] = int(time.time() * 1000)
+
+        payload = '&'.join(f'{param}={value}' for param, value in params.items())
+
+        signature = hmac.new(
+            config.BINANCE_SECRET_KEY.get_secret_value().encode('utf-8'),
+            payload.encode('utf-8'), hashlib.sha256).hexdigest()
+
+        params['signature'] = signature
+
+    def _get_request(self, path: str, params: dict) -> dict:
+        """
+        Выполняет GET запрос к бирже Binance.
+        :param path: путь запроса
+        :param headers: заголовки
+        :return: ответ от биржи
+        """
+        self._sign_params(params)
+        url = self._endpoint + path
+        response = requests.get(url, headers=self._headers, params=params, proxies=self._proxies)
+        response.raise_for_status()
+        response_json = response.json()
+        return response_json
+
+    def _post_request(self, path: str, params: dict = None) -> dict:
+        """
+        Выполняет POST запрос к бирже Binance.
+        :param path: путь запроса
+        :param params: параметры запроса
+        :param body: тело запроса
+        :return: ответ от биржи
+        """
+        self._sign_params(params)
+        url = self._endpoint + path
+        response = requests.post(url, params=params, headers=self._headers, proxies=self._proxies)
+        response.raise_for_status()
+        response_json = response.json()
+        return response_json
+
+    def get_chains(self) -> list[str]:
+        """
+        Возвращает список сетей, которые поддерживает биржа Binance.
+        :return: список сетей.
+        """
+        if not self._chains:
+            self._chains = set()
+            path = '/sapi/v1/capital/config/getall'
+            params = dict()
+            try:
+                coins_info = self._get_request(path, params)
+
+                for coin_info in coins_info:
+                    for chain_info in  coin_info.get('networkList', [{}]):
+                        chain = chain_info.get('network', '')
+                        self._chains.add(chain)
+                self._chains = list(self._chains)
+
+            except RequestException as error:
+                logger.error(
+                    f"{self.account.profile_number} Ошибка запроса, не удалось получить список сетей с биржи Binance: {error}")
+            except json.JSONDecodeError as error:
+                logger.error(f"{self.account.profile_number} Не удалось распарсить ответ биржи Binance: {error}")
+            except Exception as error:
+                logger.error(
+                    f"{self.account.profile_number} Не удалось получить список сетей с биржи Binance: {error}")
+            else:
+                logger.info(f"{self.account.profile_number} Список сетей с биржи Binance: {self._chains}")
+        return self._chains
+
+    def check_chain(self, chain: Chain | str) -> bool:
+        """
+        Проверяет, поддерживает ли биржа Binance сеть. Проверка происходит по названию сети без учета регистра.
+        :param chain: объект сети Chain или строка с названием сети
+        :return: True если сеть поддерживается, иначе False
+        """
+        chain = self._get_chain_name(chain)
+        chains = self.get_chains()
+        chains = [chain.lower() for chain in chains]
+        return chain.lower() in chains
+
+    def withdraw(
+            self,
+            *,
+            token: Token | str,
+            amount: Amount | int | float,
+            chain: Chain | str,
+            address: Optional[str] = None
+    ) -> None:
+        """
+        Вывод средств с биржи Binance, на адрес профиля или указанный адрес. После вывода ожидает подтверждения транзакции.
+        :param token: токен для вывода, можно передать объект Token или строку с названием токена
+        :param amount: количество токенов для вывода, можно передать объект Amount или число
+        :param chain: сеть вывода, можно передать объект Chain или строку с названием сети
+        :param address: адрес для вывода, если не указан, то на адрес профиля
+        :return: None
+        """
+
+        path = '/api/v5/asset/withdrawal'
+
+        wd = self._validate_inputs(token, amount, chain, address)
+
+        if not wd.is_valid:
+            message = f'Переданы некорректные аргументы в {self.name}.withdraw()'
+            logger.error(f'{self.account.profile_number} {message}')
+            raise ValueError(message)
+
+        params = dict(
+            coin=wd.token,
+            amount=wd.amount,
+            network=wd.chain,
+            address=wd.address,
+        )
+
+        message = f'с биржи {self.name} на адрес {wd.address} {wd.amount} {wd.token} {wd.chain}'
+        logger.info(f'{self.account.profile_number}: Выводим {message}')
+        try:
+            response_json = self._post_request(path, params)
+            withdraw_id = response_json.get("id")
+            self._wait_until_withdraw_complete(withdraw_id)
+            logger.info(f'{self.account.profile_number}: успешно выведено {message}')
+        except RequestException as error:
+            logger.error(
+                f'{self.account.profile_number}: Ошибка запроса, не удалось вывести {message} : {error}')
+            raise error
+        except json.JSONDecodeError as error:
+            logger.error(
+                f'{self.account.profile_number}: Не удалось распарсить ответ биржи при выводе {self.name} : {error}')
+            raise error
+        except Exception as error:
+            logger.error(f'{self.account.profile_number}: Не удалось вывести {message} : {error}')
+            raise error
+
+    def _wait_until_withdraw_complete(self, withdraw_id: str, timeout: int = 30) -> None:
+        """
+        Ожидает завершения вывода средств.
+        :param withdraw_id: идентификатор вывода
+        :param timeout: количество попыток с интервалом в 1 секунду
+        """
+        path = '/sapi/v1/capital/withdraw/history'
+        params = dict()
+
+        for _ in range(timeout):
+            withdraws = self._get_request(path, params)
+            for withdraw_info in withdraws:
+                if withdraw_info.get('id') == withdraw_id:
+                    status = withdraw_info.get('status')
+                    if status == 6:
+                        return
+            random_sleep(10)
+        else:
+            raise Exception(f'Таймаут вывода средств на Binance, id: {withdraw_id}')

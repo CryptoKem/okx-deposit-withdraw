@@ -1,9 +1,8 @@
 from loguru import logger
 
-from core.ads.ads import Ads
+from core.browser import Ads, Metamask
 from core.excel import Excel
-from core.ads.metamask import Metamask
-from core.okx_py import OKX
+from core.exchanges import Exchanges
 from core.onchain import Onchain
 from models.chain import Chain
 from models.account import Account
@@ -16,9 +15,9 @@ class Bot:
         self.chain = chain
         self.account = account
         self.ads = Ads(account)
-        self.metamask = Metamask(self.ads, account)
-        self.okx = OKX(account)
         self.excel = Excel(account)
+        self.metamask = Metamask(self.ads, account, self.excel)
+        self.exchanges = Exchanges(account)
         self.onchain = Onchain(account, chain)
 
     def __enter__(self):

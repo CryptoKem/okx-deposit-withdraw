@@ -237,6 +237,8 @@ def get_price_token(symbol: str) -> float:
     :param token: тикер токена (например, ETH)
     :return: цена токена в USDT
     """
+
+    # todo: добавить поддержку прокси
     url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol.upper()}USDT"
     response = get_response(url)
     return float(response.get('weightedAvgPrice', 0))
@@ -263,14 +265,32 @@ def timeout(timeout):
     return decorator
 
 
-def prepare_proxy_httpx(proxy: str) -> Optional[str]:
+def prepare_proxy_http(proxy: str) -> Optional[str]:
     """
-    Подготавливает прокси для использования в запросах httpx. (okx)
+    Подготавливает прокси для использования в запросах http. Из строки вида "ip:port:login:password" делает строку
+    вида "http://login:password@ip:port".
     :param proxy: строка прокси
-    :return: прокси для использования в httpx
+    :return: прокси для использования в http
     """
     if not proxy:
         return None
 
     ip, port, login, password = proxy.split(":")
     return f'http://{login}:{password}@{ip}:{port}'
+
+def prepare_proxy_requests(proxy: str | None) -> dict:
+    """
+    Подготавливает прокси для использования в запросах библиотеки requests.
+    Из строки вида "ip:port:login:password" делает словарь
+    с ключами 'http' и 'https'.
+    :param proxy: строка прокси
+    :return: словарь прокси
+    """
+    if not proxy:
+        return {}
+
+    proxy = prepare_proxy_http(proxy)
+    return {
+        'http': proxy,
+        'https': proxy
+    }

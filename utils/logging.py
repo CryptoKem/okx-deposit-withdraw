@@ -7,7 +7,6 @@ from loguru import logger
 from config.settings import config
 from utils.utils import send_telegram_message
 
-profile_number = ''
 
 def filter_record(record: dict) -> bool:
     """
@@ -15,20 +14,6 @@ def filter_record(record: dict) -> bool:
     :param record: запись лога
     :return: True
     """
-    # Объявляем переменную profile_number глобальной, для хранения номера профиля
-    global profile_number
-
-    # Если в extra есть profile_number, то записываем его в переменную profile_number
-    if isinstance(record["extra"].get("profile_number"), int):
-        profile_number = record["extra"].get("profile_number")
-    # если отправлена команда clear, то очищаем profile_number
-    elif record["extra"].get("profile_number", None) == 'clear':
-        record["extra"]["profile_number"] = ''
-        profile_number = ''
-        return False
-    # если profile_number не передан, то записываем в extra profile_number
-    elif record["extra"].get("profile_number", None) is None:
-        record["extra"]["profile_number"] = profile_number
 
     if config.chat_id and config.bot_token:
         if record["level"].name in config.alert_types:

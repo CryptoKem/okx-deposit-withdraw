@@ -274,8 +274,11 @@ def prepare_proxy_http(proxy: str) -> Optional[str]:
     """
     if not proxy:
         return None
-
-    ip, port, login, password = proxy.split(":")
+    proxy_args = proxy.split(":")
+    if len(proxy_args) != 4:
+        logger.error("Неверный формат прокси, укажите в формате 'ip:port:login:password'")
+        raise ValueError("Неверный формат прокси")
+    ip, port, login, password = proxy_args
     return f'http://{login}:{password}@{ip}:{port}'
 
 def prepare_proxy_requests(proxy: str | None) -> dict:

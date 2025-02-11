@@ -414,9 +414,7 @@ class Ads:
         Получает смещение окна браузера относительно экрана
         :return: смещение окна браузера
         """
-
         self.page.bring_to_front()
-
 
         browser_offsets = self.page.evaluate(
             """() => ({
@@ -436,3 +434,74 @@ class Ads:
 
         return viewport_offsets
 
+    def random_click(self, locator: Locator) -> None:
+        """
+        Кликает по элементу в случайном месте.
+        :param locator: локатор элемента
+        :return: None
+        """
+        box = locator.bounding_box()
+        if box:
+            offset_x = random.uniform(0, box["width"])
+            offset_y = random.uniform(0, box["height"])
+
+            locator.click(position={"x": offset_x, "y": offset_y})
+
+    def wait_locator_state(
+            self,
+            locator: Locator | str,
+            attempts: int = 30,
+            negative: bool = False,
+            equals: int | str | float | None = None,
+            attribute: str | None = None
+    ) -> bool:
+        """
+        Ожидает появления или исчезновения элемента на странице, а также проверяет равенство содержимого элемента или
+        значения атрибута заданному значению. Передавайте локатор для нахождения только одного элемента.
+
+        :param locator: Локатор Playwright или текст для поиска на странице методом get_by_text.
+        :param attempts: Количество попыток ожидания.
+        :param negative: Если True, ожидает исчезновения элемента.
+        :param equals: Если передано, проверяет равенство текстового содержимого или значения атрибута элемента.
+        :param attribute: Название атрибута для сравнения с `equals`. Если не передан, сравнивается текст элемента.
+        :return: True, если условие выполнено, иначе False.
+        """
+        # Преобразуем строку в локатор, если необходимо
+        locator = self.page.get_by_text(locator) if isinstance(locator, str) else locator
+
+        for _ in range(attempts):
+            random_sleep()
+            try:
+                # Проверяем наличие элемента
+                element_present = locator.count() > 0
+
+                # Если ожидаем исчезновение элемента
+                if negative and element_present:
+                    continue  # Элемент присутствует, ждём его исчезновения
+
+                # Если ожидаем появление элемента
+                if not negative and not element_present:
+                    continue  # Элемент отсутствует, ждём его появления
+
+                # Если указан параметр equals, проверяем значение
+                if equals is not None:
+                    if attribute:
+                        # Сравниваем значение атрибута
+                        element_value = locator.get_attribute(attribute)
+                        if element_value is None or str(element_value).strip().lower() != str(
+                                equals).strip().lower():
+                            continue  # Значение атрибута не совпадает
+                    else:
+                        # Сравниваем текст элемента
+                        element_text = locator.text_content()
+                        if element_text is None or str(element_text).strip().lower() != str(
+                                equals).strip().lower():
+                            continue  # Текст не совпадает
+
+                # Все условия выполнены
+                return True
+
+            except Exception as error:
+                logger.error(f"{self.profile_number} Ошибка при проверке элемента: {error}")
+
+        return False

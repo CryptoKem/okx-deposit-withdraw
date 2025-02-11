@@ -10,7 +10,7 @@ from utils.utils import random_sleep, generate_password, write_text_to_file
 
 class Metamask:
     """
-    Класс для работы с metamask v. 12.9.3
+    Класс для работы с metamask v. 12.11.0
     """
 
     def __init__(self, ads: Ads, account: Account, excel: Excel) -> None:
@@ -69,7 +69,7 @@ class Metamask:
         random_sleep(3, 5)
         self.ads.page.get_by_test_id('onboarding-complete-done').click()
         self.ads.page.get_by_test_id('pin-extension-next').click()
-        self.ads.click_if_exists(method='test_id', value='pin-extension-done')
+        self.ads.page.get_by_test_id('pin-extension-done').click()
         random_sleep(3, 3)
         self.ads.click_if_exists(method='test_id', value='popover-close')
 
@@ -158,7 +158,7 @@ class Metamask:
         self.ads.page.get_by_test_id('account-options-menu-button').click()
         self.ads.page.get_by_test_id('account-list-menu-details').click()
         address = self.ads.page.locator('.qr-code__address-segments').inner_text().replace('\n', '')
-        self.ads.page.get_by_role('button', name='Close').first.click()
+        self.ads.page.locator('section').get_by_role('button', name='Close').first.click()
         return address
 
     def connect(self, locator: Locator, timeout: int = 30) -> None:
@@ -247,11 +247,24 @@ class Metamask:
         if enabled_networks.get_by_text(chain.metamask_name, exact=True).count():
             enabled_networks.get_by_text(chain.metamask_name, exact=True).click()
         else:
-            # todo: исправить баг нажатия на кнопку закрыть
-            close_button = self.ads.page.get_by_role('button', name='Close').or_(self.ads.page.get_by_role('button', name='Закрыть'))
+            close_button = self.ads.page.locator('header').get_by_role('button', name='Close').or_(self.ads.page.locator('header').get_by_role('button', name='Закрыть'))
             close_button.first.click()
             self.set_chain(chain)
             self.select_chain(chain)
+
+
+    def _set_chain_data(self, chain: Chain) -> None:
+        """
+        Меняет параметры сети в Metamask. Берет данные из объекта Chain.
+        :param chain: объект сети с параметрами:
+        :return: None
+        """
+        self.ads.page.get_by_test_id('network-form-network-name').fill(chain.metamask_name)
+        self.ads.page.get_by_test_id('test-add-rpc-drop-down').click()
+        self.ads.page.get_by_role('button', name='Add RPC URL').click()
+        self.ads.page.get_by_test_id('rpc-url-input-test').fill(chain.rpc)
+        self.ads.page.get_by_role('button', name='Add URL').click()
+
 
     def set_chain(self, chain: Chain) -> None:
         """
@@ -262,16 +275,24 @@ class Metamask:
         self.ads.open_url(self._url + "#settings/networks/add-network")
         random_sleep(1, 3)
         self.ads.page.get_by_test_id('network-form-network-name').wait_for(timeout=5000, state='visible')
-        self.ads.page.get_by_test_id('network-form-network-name').fill(chain.metamask_name)
-        self.ads.page.get_by_test_id('test-add-rpc-drop-down').click()
-        self.ads.page.get_by_role('button', name='Add RPC URL').click()
-        self.ads.page.get_by_test_id('rpc-url-input-test').fill(chain.rpc)
-        self.ads.page.get_by_role('button', name='Add URL').click()
+
+        # заполняем первую часть полей
+        self._set_chain_data(chain)
+
+        # проверяем, есть ли ошибка с chain_id
         if self.ads.page.get_by_test_id('network-form-chain-id-error').count():
             raise Exception(
                 f"Error: {self.ads.profile_number} metamask не принимает rpc {chain.rpc}, попробуйте другой")
-        # todo: проверить ошибку на этапе повторного добавления сети
+
+        # заполняем chain_id и проверяем, есть ли уже сеть с таким id
         self.ads.page.get_by_test_id('network-form-chain-id').fill(str(chain.chain_id))
+        # есть ли уже сеть с таким id
+        if self.ads.page.get_by_text('This Chain ID is currently used by the Arbitrum One network.').count():
+            # повторно заполняем поля
+            self.ads.page.get_by_role('button', name='edit the original network').click()
+            self._set_chain_data(chain)
+
+        # заполняем оставшиеся поля
         self.ads.page.get_by_test_id('network-form-ticker-input').fill(chain.native_token)
         self.ads.page.get_by_role('button', name='Save').or_(self.ads.page.get_by_role('button', name='Сохранить')).click()
 

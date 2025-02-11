@@ -46,39 +46,52 @@ class Binance(AbsExchange):
         payload = '&'.join(f'{param}={value}' for param, value in params.items())
 
         signature = hmac.new(
-            config.BINANCE_SECRET_KEY.get_secret_value().encode('utf-8'),
+            config.binance_secret_key.encode('utf-8'),
             payload.encode('utf-8'), hashlib.sha256).hexdigest()
 
         params['signature'] = signature
 
-    def _get_request(self, path: str, params: dict) -> dict:
+    def _get_request(self, path: str, params: dict | None = None) -> dict:
         """
-        Выполняет GET запрос к бирже Binance.
+        Выполняет GET запрос к бирже Binance. Подписывает запрос. Берет прокси и хедеры из класса.
         :param path: путь запроса
-        :param headers: заголовки
-        :return: ответ от биржи
+        :return: ответ от биржи в формате json
         """
+        if params is None:
+            params = dict()
         self._sign_params(params)
         url = self._endpoint + path
         response = requests.get(url, headers=self._headers, params=params, proxies=self._proxies)
-        response.raise_for_status()
-        response_json = response.json()
-        return response_json
+        try:
+            response.raise_for_status()
+            response_json = response.json()
+            return response_json
+        except RequestException as error:
+            logger.error(f"{self.account.profile_number} Ошибка запроса к бирже Binance: {error}, {response.text}")
+            raise error
 
-    def _post_request(self, path: str, params: dict = None) -> dict:
+
+    def _post_request(self, path: str, params: dict | None = None) -> dict:
         """
-        Выполняет POST запрос к бирже Binance.
+        Выполняет POST запрос к бирже Binance. Подписывает запрос. Берет прокси и хедеры из класса.
         :param path: путь запроса
         :param params: параметры запроса
-        :param body: тело запроса
-        :return: ответ от биржи
+        :return:  ответ от биржи в формате json
         """
+        if params is None:
+            params = dict()
+
         self._sign_params(params)
         url = self._endpoint + path
         response = requests.post(url, params=params, headers=self._headers, proxies=self._proxies)
-        response.raise_for_status()
-        response_json = response.json()
-        return response_json
+        try:
+            response.raise_for_status()
+            response_json = response.json()
+            return response_json
+        except RequestException as error:
+            logger.error(f"{self.account.profile_number} Ошибка запроса к бирже Binance: {error}, {response.text}")
+            raise error
+
 
     def get_chains(self) -> list[str]:
         """
@@ -88,9 +101,8 @@ class Binance(AbsExchange):
         if not self._chains:
             self._chains = set()
             path = '/sapi/v1/capital/config/getall'
-            params = dict()
             try:
-                coins_info = self._get_request(path, params)
+                coins_info = self._get_request(path)
 
                 for coin_info in coins_info:
                     for chain_info in  coin_info.get('networkList', [{}]):
@@ -138,14 +150,9 @@ class Binance(AbsExchange):
         :return: None
         """
 
-        path = '/api/v5/asset/withdrawal'
+        path = '/sapi/v1/capital/withdraw/apply'
 
         wd = self._validate_inputs(token, amount, chain, address)
-
-        if not wd.is_valid:
-            message = f'Переданы некорректные аргументы в {self.name}.withdraw()'
-            logger.error(f'{self.account.profile_number} {message}')
-            raise ValueError(message)
 
         params = dict(
             coin=wd.token,
@@ -154,7 +161,7 @@ class Binance(AbsExchange):
             address=wd.address,
         )
 
-        message = f'с биржи {self.name} на адрес {wd.address} {wd.amount} {wd.token} {wd.chain}'
+        message = f'с биржи {self.__class__.__name__} на адрес {wd.address} {wd.amount} {wd.token} {wd.chain}'
         logger.info(f'{self.account.profile_number}: Выводим {message}')
         try:
             response_json = self._post_request(path, params)
@@ -167,7 +174,7 @@ class Binance(AbsExchange):
             raise error
         except json.JSONDecodeError as error:
             logger.error(
-                f'{self.account.profile_number}: Не удалось распарсить ответ биржи при выводе {self.name} : {error}')
+                f'{self.account.profile_number}: Не удалось распарсить ответ биржи при выводе {self.__class__.__name__} : {error}')
             raise error
         except Exception as error:
             logger.error(f'{self.account.profile_number}: Не удалось вывести {message} : {error}')
@@ -180,10 +187,9 @@ class Binance(AbsExchange):
         :param timeout: количество попыток с интервалом в 1 секунду
         """
         path = '/sapi/v1/capital/withdraw/history'
-        params = dict()
 
         for _ in range(timeout):
-            withdraws = self._get_request(path, params)
+            withdraws = self._get_request(path)
             for withdraw_info in withdraws:
                 if withdraw_info.get('id') == withdraw_id:
                     status = withdraw_info.get('status')

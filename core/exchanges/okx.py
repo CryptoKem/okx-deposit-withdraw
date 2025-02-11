@@ -31,7 +31,6 @@ class Okx(AbsExchange):
         self._endpoint = 'https://www.okx.com'
         self._proxies = prepare_proxy_requests(config.okx_proxy)
 
-
     def _get_headers(self, method: str, request_path: str, body: dict | None = None) -> dict:
         """
         Собирает заголовки для запроса к бирже OKX, с подписью
@@ -65,7 +64,7 @@ class Okx(AbsExchange):
         }
         return headers
 
-    def _get_request(self, path: str, headers: dict) -> dict:
+    def _get_request(self, path: str) -> dict:
         """
         Выполняет GET запрос к бирже OKX.
         :param path: путь запроса
@@ -73,6 +72,7 @@ class Okx(AbsExchange):
         :return: ответ от биржи
         """
         url = self._endpoint + path
+        headers = self._get_headers('GET', path)
         response = requests.get(url, headers=headers, proxies=self._proxies)
         response.raise_for_status()
         response_json = response.json()
@@ -80,7 +80,7 @@ class Okx(AbsExchange):
             raise HTTPError('status =! 0 ' + response_json.get("msg"))
         return response_json
 
-    def _post_request(self, path: str, headers: dict, body: dict | None = None) -> dict:
+    def _post_request(self, path: str, body: dict | None = None) -> dict:
         """
         Выполняет POST запрос к бирже OKX.
         :param path: путь запроса
@@ -89,6 +89,7 @@ class Okx(AbsExchange):
         :return: ответ от биржи
         """
         url = self._endpoint + path
+        headers = self._get_headers('POST', path, body)
         response = requests.post(url, headers=headers, json=body, proxies=self._proxies)
         response.raise_for_status()
         response_json = response.json()
@@ -104,9 +105,8 @@ class Okx(AbsExchange):
         if not self._chains:
             self._chains = set()
             path = '/api/v5/asset/currencies'
-            headers = self._get_headers('GET', path)
             try:
-                response_json = self._get_request(path, headers)
+                response_json = self._get_request(path)
                 chains_data = response_json.get("data")
 
                 for chain in chains_data:
@@ -125,7 +125,6 @@ class Okx(AbsExchange):
                 logger.info(f"{self.account.profile_number} Список сетей с биржи OKX: {self._chains}")
         return self._chains
 
-
     def check_chain(self, chain: Chain | str) -> bool:
         """
         Проверяет, поддерживает ли биржа OKX сеть. Проверка происходит по названию сети без учета регистра.
@@ -140,7 +139,6 @@ class Okx(AbsExchange):
         chains = self.get_chains()
         chains = [chain.lower() for chain in chains]
         return chain.lower() in chains
-
 
     def withdraw(
             self,
@@ -177,12 +175,8 @@ class Okx(AbsExchange):
 
         path = '/api/v5/asset/withdrawal'
 
-        wd = self._validate_inputs(token, amount, chain, address)
 
-        if not wd.is_valid:
-            message = f'Переданы некорректные аргументы в {self.name}.withdraw()'
-            logger.error(f'{self.account.profile_number} {message}')
-            raise ValueError(message)
+        wd = self._validate_inputs(token, amount, chain, address)
 
         token_with_chain = f'{wd.token}-{wd.chain}'
 
@@ -193,12 +187,11 @@ class Okx(AbsExchange):
             toAddr=wd.address,
             chain=token_with_chain
         )
-        headers = self._get_headers('POST', path, body)
 
-        message = f'с биржи {self.name} на адрес {wd.address} {wd.amount} {token_with_chain}'
+        message = f'с биржи {self.__class__.__name__} на адрес {wd.address} {wd.amount} {token_with_chain}'
         logger.info(f'{self.account.profile_number}: Выводим {message}')
         try:
-            response_json = self._post_request(path, headers, body)
+            response_json = self._post_request(path, body)
             withdraw_id = response_json.get("data")[0].get("wdId")
             self._wait_until_withdraw_complete(withdraw_id)
             logger.info(f'{self.account.profile_number}: успешно выведено {message}')
@@ -206,7 +199,7 @@ class Okx(AbsExchange):
             logger.error(f'{self.account.profile_number}: Ошибка запроса, не удалось вывести {message} : {error}')
             raise error
         except json.JSONDecodeError as error:
-            logger.error(f'{self.account.profile_number}: Не удалось распарсить ответ биржи при выводе {self.name} : {error}')
+            logger.error(f'{self.account.profile_number}: Не удалось распарсить ответ биржи при выводе {self.__class__.__name__} : {error}')
             raise error
         except Exception as error:
             logger.error(f'{self.account.profile_number}: Не удалось вывести {message} : {error}')
@@ -220,10 +213,9 @@ class Okx(AbsExchange):
         :param timeout: количество попыток с интервалом в 1 секунду
         """
         path = f'/api/v5/asset/withdrawal-history?wdId={withdraw_id}'
-        headers = self._get_headers('GET', path)
 
         for _ in range(timeout):
-            response_json = self._get_request(path, headers)
+            response_json = self._get_request(path)
             status = str(response_json.get("data", [{}])[0].get("state", -4))
             match status:
                 case '2': # успешно
@@ -243,9 +235,8 @@ class Okx(AbsExchange):
         :return: список словарей с информацией о субаккаунтах
         """
         path = '/api/v5/users/subaccount/list'
-        headers = self._get_headers('GET', path)
         try:
-            response_json = self._get_request(path, headers)
+            response_json = self._get_request(path)
             data = response_json.get('data', [{}])
             sub_names = [sub.get('subAcct') for sub in data]
             return sub_names
@@ -268,9 +259,8 @@ class Okx(AbsExchange):
         :return: список словарей с информацией о балансе
         """
         path = f'/api/v5/account/subaccount/balances?subAcct={sub_acc_name}'
-        headers = self._get_headers('GET', path)
         try:
-            response_json = self._get_request(path, headers)
+            response_json = self._get_request(path)
             return response_json.get('data', [{}])[0].get('details', [{}])
 
         except RequestException as error:
@@ -291,9 +281,8 @@ class Okx(AbsExchange):
         :return: список словарей с информацией о балансе
         """
         path = f'/api/v5/asset/subaccount/balances?subAcct={sub_acc_name}'
-        headers = self._get_headers('GET', path)
         try:
-            response_json = self._get_request(path, headers)
+            response_json = self._get_request(path)
             return response_json.get('data', [{}])
 
         except RequestException as error:
@@ -337,8 +326,7 @@ class Okx(AbsExchange):
                         'to': 6,
                         'subAcct': sub_name,
                     }
-                    headers = self._get_headers('POST', path, body)
-                    self._post_request(path, headers, body)
+                    self._post_request(path, body)
                     logger.info(f'{self.account.profile_number} Перевели {token} {balance} c {sub_name} на основной счет')
 
 
@@ -348,8 +336,7 @@ class Okx(AbsExchange):
         :return:  список словарей с информацией о балансе
         """
         path = '/api/v5/asset/balance'
-        headers = self._get_headers('GET', path)
-        response_json = self._get_request(path, headers)
+        response_json = self._get_request(path)
         return response_json.get('data', [{}])
 
 
@@ -359,8 +346,7 @@ class Okx(AbsExchange):
         :return:  список словарей с информацией о балансе
         """
         path = '/api/v5/account/balance' # trading
-        headers = self._get_headers('GET', path)
-        response_json = self._get_request(path, headers)
+        response_json = self._get_request(path)
         return response_json.get('data', [{}])[0].get('details', [{}])
 
 
@@ -387,6 +373,5 @@ class Okx(AbsExchange):
                 'from': 18,
                 'to': 6
             }
-            headers = self._get_headers('POST', path, body)
-            self._post_request(path, headers, body)
+            self._post_request(path, body)
             logger.info(f'{self.account.profile_number} Перевели {token} {balance} c trading на funding счет')

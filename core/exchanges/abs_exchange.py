@@ -14,7 +14,6 @@ from models.withdraw import WithdrawData
 
 # класс для обмена валют
 class AbsExchange(ABC):
-    name: str
     _chains: list[str] | set[str] = []
 
     @abstractmethod
@@ -94,6 +93,10 @@ class AbsExchange(ABC):
             address=address
         )
 
+        if not withdraw_data.is_valid:
+            logger.error(f"{self.account.profile_number} [{self.__class__.__name__}] Переданы некорректные аргументы в withdraw(): {withdraw_data}")
+            raise ValueError(f"Переданы некорректные аргументы в {self.__class__.__name__}.withdraw()")
+
         return withdraw_data
 
     def _get_chain_name(self, chain: Chain | str) -> str | None:
@@ -114,6 +117,6 @@ class AbsExchange(ABC):
 
             if chain_name is None:
                 logger.error(
-                    f"{self.account.profile_number} [{self.name}] Вывод невозможен, у сети {chain.name} нет названия для {self.name}")
+                    f"{self.account.profile_number} [{self.__class__.__name__}] Вывод невозможен, у сети {chain.name} нет названия для")
             return chain_name
 

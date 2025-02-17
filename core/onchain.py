@@ -5,24 +5,35 @@ from typing import Optional
 
 from eth_account import Account as EthAccount
 from eth_typing import ChecksumAddress
-from web3.contract import Contract
-from web3 import Web3
 from loguru import logger
+from web3 import Web3
+from web3.contract import Contract
 
-from config import config, Tokens
+from config import config, Tokens, Chains
 from models.account import Account
-from models.token import Token, TokenTypes
-from models.chain import Chain
 from models.amount import Amount
+from models.chain import Chain
 from models.contract_raw import ContractRaw
-from utils.utils import to_checksum, random_sleep
+from models.token import Token, TokenTypes
+from utils.utils import to_checksum, random_sleep, get_multiplayer, prepare_proxy_requests, get_user_agent
 
 
 class Onchain:
     def __init__(self, account: Account, chain: Chain):
         self.account = account
         self.chain = chain
-        self.w3 = Web3(Web3.HTTPProvider(chain.rpc))
+        request_kwargs = {
+            'User-Agent': get_user_agent(),
+            "Content-Type": "application/json",
+            'proxies': None
+        }
+        if config.is_web3_proxy:
+            request_kwargs['proxies'] = {
+                'http': prepare_proxy_requests(account.proxy),
+                'https': prepare_proxy_requests(config.web3_proxy)
+            }
+
+        self.w3 = Web3(Web3.HTTPProvider(chain.rpc, request_kwargs=request_kwargs))
         if self.account.private_key:
             if not self.account.address:
                 self.account.address = self.w3.eth.account.from_key(self.account.private_key).address
@@ -92,19 +103,6 @@ class Onchain:
         """
         return self.w3.eth.contract(contract_raw.address, abi=contract_raw.abi)
 
-    def _get_priority_fee(self) -> int:
-        """
-        Получение приоритетной ставки для транзакции за последние 30 блоков
-        :return: приоритетная ставка
-        """
-        fee_history = self.w3.eth.fee_history(30, 'latest', [20])
-        priority_fees = [priority_fee[0] for priority_fee in fee_history['reward']]
-        median_index = len(priority_fees) // 2
-        priority_fees.sort()
-        median_priority_fee = priority_fees[median_index]
-        random_multiplier = random.uniform(1.05, 1.1)
-        return int(median_priority_fee * random_multiplier)
-
     def send_token(self,
                    amount: Amount | int | float,
                    *,
@@ -171,6 +169,50 @@ class Onchain:
         logger.info(f'{self.account.profile_number} Транзакция отправлена [{message}] хэш: {tx_hash}')
         return tx_hash
 
+    def _prepare_fee(self, tx_params: dict | None = None) -> dict:
+        """
+        Подготовка параметров транзакции с учетом EIP-1559
+        :param tx_params: параметры транзакции
+        :return: параметры транзакции
+        """
+        if tx_params is None:
+            tx_params = {}
+
+        # получаем цену газа / base_fee
+        if self.chain == Chains.LINEA:
+            gas_price = 7
+        else:
+            gas_price = self.w3.eth.gas_price
+
+        # получаем историю комиссий за последние 10 блоков с процентилем 20
+        fee_history = self.w3.eth.fee_history(10, 'latest', [20])
+
+        # проверяем наличие base комиссии, если есть, то блокчейн работает с EIP-1559
+        if any(fee_history.get('baseFeePerGas', [0])):
+            # блокчейн работает с EIP-1559
+            priority_fees = [priority_fee[0] for priority_fee in fee_history.get('reward', [[0]])]            # находим индекс медианы
+            median_index = len(priority_fees) // 2
+            # сортируем список, чтобы найти медиану
+            priority_fees.sort()
+            # получаем медиану (среднее без искажений)
+            median_priority_fee = priority_fees[median_index]
+
+            # вычисляем итоговую комиссию
+            priority_fee = int(median_priority_fee * get_multiplayer())
+            max_fee = int((gas_price + priority_fee) * get_multiplayer())
+
+            # добавляем параметры в транзакцию
+            tx_params['type'] = 2
+            tx_params['maxFeePerGas'] = max_fee
+            tx_params['maxPriorityFeePerGas'] = priority_fee
+
+        else:
+            # блокчейн работает с Legacy
+            tx_params['gasPrice'] = int(gas_price * get_multiplayer())
+
+        return tx_params
+
+
     def _prepare_tx(self, value: Optional[Amount] = None,
                     to_address: Optional[str | ChecksumAddress] = None) -> dict:
         """
@@ -179,22 +221,20 @@ class Onchain:
         :param to_address:  адрес получателя, если транзакция НЕ на смарт контракт
         :return: параметры транзакции
         """
-        random_multiplier = random.uniform(1.05, 1.1)
-        base_fee = self.w3.eth.gas_price
-        priority_fee = self._get_priority_fee()
-        max_fee = int((base_fee + priority_fee) * random_multiplier)
+        # получаем параметры комиссии
+        tx_params = self._prepare_fee()
 
-        tx_params = {
-            'from': self.account.address,
-            'nonce': self.w3.eth.get_transaction_count(self.account.address),
-            'maxFeePerGas': max_fee,
-            'maxPriorityFeePerGas': priority_fee,
-            'chainId': self.w3.eth.chain_id,
-        }
+        # добавляем параметры транзакции
+        tx_params['from'] = self.account.address
+        tx_params['nonce'] = self.w3.eth.get_transaction_count(self.account.address)
+        tx_params['chainId'] = self.chain.chain_id
 
+        # если передана сумма перевода, то добавляем ее в транзакцию
         if value:
             tx_params['value'] = value.wei
 
+        # если передан адрес получателя, то добавляем его в транзакцию
+        # нужно для отправки нативных токенов на адрес, а не на смарт контракт
         if to_address:
             tx_params['to'] = to_address
 
@@ -302,9 +342,8 @@ class Onchain:
         """
         fees_data = self.w3.eth.fee_history(50, 'latest')
         base_fee = fees_data['baseFeePerGas']
-        for fee in base_fee:
-            if fee > 0:
-                return True
+        if any(base_fee):
+            return True
         return False
 
 

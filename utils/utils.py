@@ -234,7 +234,7 @@ def to_checksum(address: Optional[str | ChecksumAddress]) -> ChecksumAddress:
 def get_price_token(symbol: str) -> float:
     """
     Получает цену токена c binance по запросу к API https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}USDT.
-    :param token: тикер токена (например, ETH)
+    :param symbol: тикер токена (например, ETH)
     :return: цена токена в USDT
     """
 
@@ -297,3 +297,11 @@ def prepare_proxy_requests(proxy: str | None) -> dict:
         'http': proxy,
         'https': proxy
     }
+
+def get_user_agent() -> str:
+    """
+    Получает случайный user-agent из файла user_agents.txt
+    :return: user-agent
+    """
+    user_agents = get_list_from_file("user_agents.txt")
+    return random.choice(user_agents)

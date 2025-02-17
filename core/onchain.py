@@ -30,10 +30,7 @@ class Onchain:
             'proxies': None
         }
         if config.is_web3_proxy:
-            request_kwargs['proxies'] = {
-                'http': prepare_proxy_requests(account.proxy),
-                'https': prepare_proxy_requests(config.web3_proxy)
-            }
+            request_kwargs['proxies'] = prepare_proxy_requests(self.account.proxy)
 
         self.w3 = Web3(Web3.HTTPProvider(chain.rpc, request_kwargs=request_kwargs))
         if self.account.private_key:

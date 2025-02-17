@@ -23,9 +23,11 @@ class Onchain:
         self.account = account
         self.chain = chain
         request_kwargs = {
-            'User-Agent': get_user_agent(),
-            "Content-Type": "application/json",
-            'proxies': None
+            'headers': {
+                'User-Agent': get_user_agent(),
+                "Content-Type": "application/json",
+                'proxies': None
+            },
         }
         if config.is_web3_proxy:
             request_kwargs['proxies'] = {
@@ -179,10 +181,6 @@ class Onchain:
             tx_params = {}
 
         # получаем цену газа / base_fee
-        if self.chain == Chains.LINEA:
-            gas_price = 7
-        else:
-            gas_price = self.w3.eth.gas_price
 
         # получаем историю комиссий за последние 10 блоков с процентилем 20
         fee_history = self.w3.eth.fee_history(10, 'latest', [20])
@@ -190,6 +188,7 @@ class Onchain:
         # проверяем наличие base комиссии, если есть, то блокчейн работает с EIP-1559
         if any(fee_history.get('baseFeePerGas', [0])):
             # блокчейн работает с EIP-1559
+            base_fee = fee_history.get('baseFeePerGas', [0])[-1]  # получаем base_fee
             priority_fees = [priority_fee[0] for priority_fee in fee_history.get('reward', [[0]])]            # находим индекс медианы
             median_index = len(priority_fees) // 2
             # сортируем список, чтобы найти медиану
@@ -199,7 +198,7 @@ class Onchain:
 
             # вычисляем итоговую комиссию
             priority_fee = int(median_priority_fee * get_multiplayer())
-            max_fee = int((gas_price + priority_fee) * get_multiplayer())
+            max_fee = int((base_fee + priority_fee) * get_multiplayer())
 
             # добавляем параметры в транзакцию
             tx_params['type'] = 2
@@ -208,7 +207,7 @@ class Onchain:
 
         else:
             # блокчейн работает с Legacy
-            tx_params['gasPrice'] = int(gas_price * get_multiplayer())
+            tx_params['gasPrice'] = int(self.w3.eth.gas_price * get_multiplayer())
 
         return tx_params
 

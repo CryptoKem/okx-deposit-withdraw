@@ -1,3 +1,5 @@
+from typing import Iterator
+
 from models.chain import Chain
 from models.exceptions import ChainNameError
 
@@ -6,12 +8,11 @@ class Chains:
     """
     Класс для хранения списка сетей.
     Название переменных Chains и значение name в объекте Chain должны совпадать.
-    Информацию для добавление сети можно взять из https://chainlist.org/ (рекомендую 1rpc)
+    Информация для добавления сети можно взять из https://chainlist.org/ (рекомендую 1rpc)
     и из https://chainid.network/chains.json, либо https://api.debank.com/chain/list
-    Информацию о eip1559 можно посмотреть тут https://api.debank.com/chain/list
 
     Сети из данного списка можно использовать в скрипте вставляя в выбор или добавление сети
-    метамаска, а так же для подключение к RPC ноде в Web3 транзакциях.
+    метамаска, а так же для подключения к RPC ноде в Web3 транзакциях.
 
     Объект Chain содержит следующие поля:
 
@@ -23,8 +24,8 @@ class Chains:
 
     опциональные:
 
-    - tx_type: тип транзакции, по умолчанию 2 (0 - Legacy, 2 - EIP-1559), можно искать тут https://api.debank.com/chain/list
     - native_token: тикер нативного токена сети, по умолчанию 'ETH'
+    - is_eip1559: если сеть поддерживает EIP-1559, то True, иначе False, можно взять тут https://api.debank.com/chain/list
     - metamask_name: название сети в metamask, по умолчанию берется из параметра name
     - okx_name: название сети в OKX, список сетей можно получить запустив метод bot.okx.get_chains()
 
@@ -37,9 +38,8 @@ class Chains:
         rpc='https://1rpc.io/eth',
         chain_id=1,
         metamask_name='Ethereum Mainnet',
-        tx_type=2,
-        native_token='ETH',
-        okx_name='ERC20'
+        okx_name='ERC20',
+        binance_name='ETH'
     )
 
     LINEA = Chain(
@@ -47,8 +47,6 @@ class Chains:
         rpc='https://1rpc.io/linea',
         chain_id=59144,
         metamask_name='Linea',
-        tx_type=2,
-        native_token='ETH',
         okx_name='Linea'
     )
 
@@ -57,8 +55,6 @@ class Chains:
         rpc='https://1rpc.io/arb',
         chain_id=42161,
         metamask_name='Arbitrum One',
-        tx_type=2,
-        native_token='ETH',
         okx_name='Arbitrum One'
     )
 
@@ -67,18 +63,16 @@ class Chains:
         rpc='https://1rpc.io/bnb',
         chain_id=56,
         metamask_name='Binance Smart Chain',
-        tx_type=0,
         native_token='BNB',
-        okx_name='BSC'
+        okx_name='BSC',
+        binance_name='BSC'
     )
 
     OP = Chain(
         name='op',
         rpc='https://1rpc.io/op',
         chain_id=10,
-        native_token='ETH',
         metamask_name='Optimism Mainnet',
-        tx_type=2,
         okx_name='Optimism'
     )
 
@@ -88,7 +82,6 @@ class Chains:
         chain_id=137,
         native_token='POL',
         metamask_name='Polygon',
-        tx_type=2,
         okx_name='Polygon'
     )
 
@@ -98,7 +91,6 @@ class Chains:
         chain_id=43114,
         native_token='AVAX',
         metamask_name='Avalanche',
-        tx_type=2,
         okx_name='Avalanche C'
     )
 
@@ -106,12 +98,31 @@ class Chains:
         name='zksync',
         rpc='https://1rpc.io/zksync2-era',
         chain_id=324,
-        native_token='ETH',
         metamask_name='zkSync',
-        tx_type=2,
         okx_name='zkSync Era'
     )
 
+    CORE = Chain(
+        name='core',
+        rpc='https://1rpc.io/core',
+        chain_id=324,
+        native_token='CORE',
+        metamask_name='Core',
+        okx_name='core'
+    )
+    SONEIUM = Chain(
+        name='soneium',
+        rpc='https://soneium.drpc.org',
+        chain_id=1868,
+        metamask_name='Soneium',
+    )
+
+    def __iter__(self) -> Iterator[Chain]:
+        """
+        Метод для итерации по сетям, работает только при инициализации объекта Chains
+        :return: итератор по сетям
+        """
+        return iter(self.get_chains_list())
 
     @classmethod
     def get_chain(cls, name: str) -> Chain:

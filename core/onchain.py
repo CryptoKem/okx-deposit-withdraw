@@ -137,20 +137,27 @@ class Onchain:
         if not isinstance(amount, Amount):
             amount = Amount(amount, decimals=token.decimals)
 
-        # получаем случайный множитель учета газа в транзакции
-        multiplier = random.uniform(1.05, 1.1)
-
         # если передан нативный токен
         if token.type_token == TokenTypes.NATIVE:
             # подготавливаем параметры транзакции
             tx = self._prepare_tx(amount, to_address)
             # расчет возможной комиссии
-            fee_spend = 21000 * tx['maxFeePerGas'] * multiplier
+            l1_fee = self.get_l1_fee(tx)
+            gas_spend = self.w3.eth.estimate_gas({'from': self.account.address, 'to': to_address, 'value': 1})
+            fee_for_gas = gas_spend * tx.get('maxFeePerGas', tx.get('gasPrice'))
+            fee_spend = (l1_fee.wei + gas_spend * fee_for_gas) * get_multiplayer()
             # проверка наличия средств на балансе
             if balance.wei - fee_spend - amount.wei < 0:
                 message = f' баланс {token.symbol}: {balance}, сумма: {amount}'
-                logger.error(f'{self.account.profile_number} Недостаточно средств для отправки транзакции, {message}')
-                raise ValueError(f'Недостаточно средств для отправки транзакции: {message}')
+                logger.warning(
+                    f'{self.account.profile_number} Недостаточно средств для отправки транзакции, {message}'
+                    f'Отправляем все доступные средства')
+                amount = Amount(balance.wei - fee_spend, wei=True)
+                if amount.wei < 0:
+                    logger.error(
+                        f'{self.account.profile_number} Недостаточно средств для отправки транзакции')
+                    raise ValueError('Недостаточно средств для отправки нативного токена')
+
             tx['value'] = amount.wei
         else:
             # проверка наличия средств на балансе
@@ -163,51 +170,81 @@ class Onchain:
             # создаем транзакцию
             tx = contract.functions.transfer(to_address, amount.wei).build_transaction(tx_params)
         # подписываем и отправляем транзакцию
+
+        self._estimate_gas(tx)
         tx_hash = self._sign_and_send(tx)
         message = f' {amount} {token.symbol} на адрес {to_address}'
         logger.info(f'{self.account.profile_number} Транзакция отправлена [{message}] хэш: {tx_hash}')
         return tx_hash
 
-    def _prepare_fee(self, tx_params: dict | None = None) -> dict:
+    def _estimate_gas(self, tx: dict) -> None:
         """
-        Подготовка параметров транзакции с учетом EIP-1559
-        :param tx_params: параметры транзакции
-        :return: параметры транзакции
+        Оценивает стоимость газа для транзакции и добавляет исходный словарь tx параметр gas
+        :param tx: параметры транзакции
+        """
+        tx['gas'] = int(self.w3.eth.estimate_gas(tx) * get_multiplayer())
+
+    def _get_fee(self, tx_params: dict[str, str | int] | None = None) -> dict[str, str | int]:
+        """
+        Подготовка параметров транзакции с учетом EIP-1559. Берет значение EIP-1559 из self.chain.is_eip1559,
+        если не определено, то запрашивает и сохраняет значение на время сессии.
+        Если сеть не поддерживает EIP-1559, то устанавливает параметр gasPrice,
+        если поддерживает, то устанавливает параметры maxFeePerGas и maxPriorityFeePerGas.
+        :param tx_params: параметры транзакции без параметров комиссии либо None, если передан None, то создается новый словарь
         """
         if tx_params is None:
             tx_params = {}
 
-        # получаем цену газа / base_fee
+        fee_history = None
 
-        # получаем историю комиссий за последние 10 блоков с процентилем 20
-        fee_history = self.w3.eth.fee_history(10, 'latest', [20])
+        if self.chain.is_eip1559 is None:
+            fee_history = self.w3.eth.fee_history(10, 'latest', [20])
+            self.chain.is_eip1559 = any(fee_history.get('baseFeePerGas', [0]))
 
-        # проверяем наличие base комиссии, если есть, то блокчейн работает с EIP-1559
-        if any(fee_history.get('baseFeePerGas', [0])):
-            # блокчейн работает с EIP-1559
-            base_fee = fee_history.get('baseFeePerGas', [0])[-1]  # получаем base_fee
-            priority_fees = [priority_fee[0] for priority_fee in fee_history.get('reward', [[0]])]            # находим индекс медианы
-            median_index = len(priority_fees) // 2
-            # сортируем список, чтобы найти медиану
-            priority_fees.sort()
-            # получаем медиану (среднее без искажений)
-            median_priority_fee = priority_fees[median_index]
-
-            # вычисляем итоговую комиссию
-            priority_fee = int(median_priority_fee * get_multiplayer())
-            max_fee = int((base_fee + priority_fee) * get_multiplayer())
-
-            # добавляем параметры в транзакцию
-            tx_params['type'] = 2
-            tx_params['maxFeePerGas'] = max_fee
-            tx_params['maxPriorityFeePerGas'] = priority_fee
-
-        else:
-            # блокчейн работает с Legacy
+        if self.chain.is_eip1559 is False:
             tx_params['gasPrice'] = int(self.w3.eth.gas_price * get_multiplayer())
+            return tx_params
+
+        fee_history = fee_history or self.w3.eth.fee_history(10, 'latest', [20])
+        base_fee = fee_history.get('baseFeePerGas', [0])[-1]
+        priority_fees = [priority_fee[0] for priority_fee in fee_history.get('reward', [[0]])]
+        median_index = len(priority_fees) // 2
+        priority_fees.sort()
+        median_priority_fee = priority_fees[median_index]
+
+        priority_fee = int(median_priority_fee * get_multiplayer())
+        max_fee = int((base_fee + priority_fee) * get_multiplayer())
+
+        tx_params['type'] = 2
+        tx_params['maxFeePerGas'] = max_fee
+        tx_params['maxPriorityFeePerGas'] = priority_fee
 
         return tx_params
 
+
+    def get_l1_fee(self, tx_params: dict[str, str | int]) -> Amount:
+        """
+        Получение комиссии для L1 сети Optimism
+        :param tx_params: параметры транзакции
+        :return: комиссия
+        """
+        if self.chain.name != 'op':
+            return Amount(0, wei=True)
+
+        abi = [
+            {
+                "inputs": [{"internalType": "bytes", "name": "_data", "type": "bytes"}],
+                "name": "getL1Fee",
+                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ]
+        oracle_address = self.w3.to_checksum_address('0x420000000000000000000000000000000000000F')
+        contract = self.w3.eth.contract(address=oracle_address, abi=abi)
+        tx_params['data'] = tx_params.get('data', '0x')
+        l1_fee = contract.functions.getL1Fee(tx_params['data']).call()
+        return Amount(l1_fee, wei=True)
 
     def _prepare_tx(self, value: Optional[Amount] = None,
                     to_address: Optional[str | ChecksumAddress] = None) -> dict:
@@ -218,7 +255,7 @@ class Onchain:
         :return: параметры транзакции
         """
         # получаем параметры комиссии
-        tx_params = self._prepare_fee()
+        tx_params = self._get_fee()
 
         # добавляем параметры транзакции
         tx_params['from'] = self.account.address
@@ -235,7 +272,6 @@ class Onchain:
             tx_params['to'] = to_address
 
         return tx_params
-
 
     def _get_allowance(self, token: Token, spender: str | ChecksumAddress | ContractRaw) -> Amount:
         """
@@ -254,7 +290,7 @@ class Onchain:
         allowance = contract.functions.allowance(self.account.address, spender).call()
         return Amount(allowance, decimals=token.decimals, wei=True)
 
-    def _approve(self, token: Optional[Token], amount: Amount | int | float,
+    def approve(self, token: Optional[Token], amount: Amount | int | float,
                  spender: str | ChecksumAddress | ContractRaw) -> None:
 
         """
@@ -281,6 +317,7 @@ class Onchain:
         tx_params = self._prepare_tx()
 
         tx = contract.functions.approve(spender, amount.wei).build_transaction(tx_params)
+        self._estimate_gas(tx)
         self._sign_and_send(tx)
         message = f'approve {amount} {token.symbol} to {spender}'
         logger.info(f'{self.account.profile_number} Транзакция отправлена {message}')
@@ -291,8 +328,6 @@ class Onchain:
         :param tx: параметры транзакции
         :return: хэш транзакции
         """
-        random_multiplier = random.uniform(1.05, 1.1)
-        tx['gas'] = int(self.w3.eth.estimate_gas(tx) * random_multiplier * 1.1)
         signed_tx = self.w3.eth.account.sign_transaction(tx, self.account.private_key)
         tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)

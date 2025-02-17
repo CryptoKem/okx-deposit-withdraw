@@ -213,22 +213,23 @@ class Onchain:
         Проверка возможности отправки нативного токена и корректировка суммы перевода, если недостаточно средств
         :param tx_params: параметры транзакции c указанным value
         """
+        amount = Amount(tx_params['value'], wei=True)
         l1_fee = self._get_l1_fee(tx_params)
         gas_spend = self.w3.eth.estimate_gas(
             {'from': self.account.address, 'to': self.account.address, 'value': 1})
         fee_for_gas = tx_params.get('maxFeePerGas', tx_params.get('gasPrice'))
-        fee_spend = (l1_fee.wei + gas_spend * fee_for_gas) * get_multiplayer()
+        fee_spend = (l1_fee.wei + gas_spend * fee_for_gas) * get_multiplayer(1.1, 1.2)
 
         # проверка наличия средств на балансе
         balance = self.get_balance()
-        if balance.wei - fee_spend - tx_params.get('value', 0) > 0:
+        if balance.wei - fee_spend - amount.wei > 0:
             return
 
-        message = f'баланс {self.chain.native_token}: {balance}, сумма: {tx_params.get("value", 0)}'
+        message = f'баланс {self.chain.native_token}: {balance}, сумма: {amount}'
         logger.warning(
             f'{self.account.profile_number} Недостаточно средств для отправки транзакции, {message}'
             f'Отправляем все доступные средства')
-        tx_params['value'] = balance.wei - fee_spend
+        tx_params['value'] = int(balance.wei - (fee_spend * get_multiplayer(1.1, 1.2)))
         if tx_params['value'] > 0:
             return
         logger.error(f'{self.account.profile_number} Недостаточно средств для отправки транзакции')
@@ -270,6 +271,7 @@ class Onchain:
         if token.type_token == TokenTypes.NATIVE:
             tx_params = self._prepare_tx(amount, to_address)
             self._validate_native_transfer_value(tx_params)
+            amount = Amount(tx_params['value'], wei=True)
         else:
             # получаем баланс кошелька
             balance = self.get_balance(token=token)

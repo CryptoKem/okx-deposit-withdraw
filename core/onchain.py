@@ -26,8 +26,8 @@ class Onchain:
             'headers': {
                 'User-Agent': get_user_agent(),
                 "Content-Type": "application/json",
-                'proxies': None
             },
+            'proxies': None
         }
         if config.is_web3_proxy:
             request_kwargs['proxies'] = {

@@ -271,7 +271,7 @@ class Metamask:
         """
         self.ads.page.get_by_test_id('network-form-network-name').fill(chain.metamask_name)
         self.ads.page.get_by_test_id('test-add-rpc-drop-down').click()
-        self.ads.page.get_by_role('button', name='Add RPC URL').click()
+        self.ads.page.get_by_role('button', name='Add RPC URL').or_(self.ads.page.get_by_role('button', name='Добавить URL')).first.click()
         self.ads.page.get_by_test_id('rpc-url-input-test').fill(chain.rpc)
         self.ads.page.get_by_role('button', name='Add URL').click()
 

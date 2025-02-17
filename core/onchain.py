@@ -102,6 +102,32 @@ class Onchain:
         """
         return self.w3.eth.contract(contract_raw.address, abi=contract_raw.abi)
 
+
+    def _validate_native_transfer_value(self, tx_params: dict) -> None:
+        """
+        Проверка возможности отправки нативного токена
+        :param amount: сумма перевода
+        :param to_address: адрес получателя
+        """
+        l1_fee = self._get_l1_fee(tx_params)
+        gas_spend = self.w3.eth.estimate_gas({'from': self.account.address, 'to': self.account.address, 'value': 1})
+        fee_for_gas = tx_params.get('maxFeePerGas', tx_params.get('gasPrice'))
+        fee_spend = (l1_fee.wei + gas_spend * fee_for_gas) * get_multiplayer()
+        # проверка наличия средств на балансе
+        balance = self.get_balance()
+        if balance.wei - fee_spend - tx_params['value'] < 0:
+            message = f'баланс {self.chain.native_token}: {balance}, сумма: {tx_params["value"]}'
+            logger.warning(
+                f'{self.account.profile_number} Недостаточно средств для отправки транзакции, {message}'
+                f'Отправляем все доступные средства')
+            tx_params['value'] = balance.wei - fee_spend
+            if tx_params['value'] < 0:
+                logger.error(
+                    f'{self.account.profile_number} Недостаточно средств для отправки транзакции')
+                raise ValueError('Недостаточно средств для отправки нативного токена')
+
+
+
     def send_token(self,
                    amount: Amount | int | float,
                    *,
@@ -139,26 +165,8 @@ class Onchain:
 
         # если передан нативный токен
         if token.type_token == TokenTypes.NATIVE:
-            # подготавливаем параметры транзакции
-            tx = self._prepare_tx(amount, to_address)
-            # расчет возможной комиссии
-            l1_fee = self.get_l1_fee(tx)
-            gas_spend = self.w3.eth.estimate_gas({'from': self.account.address, 'to': to_address, 'value': 1})
-            fee_for_gas = gas_spend * tx.get('maxFeePerGas', tx.get('gasPrice'))
-            fee_spend = (l1_fee.wei + gas_spend * fee_for_gas) * get_multiplayer()
-            # проверка наличия средств на балансе
-            if balance.wei - fee_spend - amount.wei < 0:
-                message = f' баланс {token.symbol}: {balance}, сумма: {amount}'
-                logger.warning(
-                    f'{self.account.profile_number} Недостаточно средств для отправки транзакции, {message}'
-                    f'Отправляем все доступные средства')
-                amount = Amount(balance.wei - fee_spend, wei=True)
-                if amount.wei < 0:
-                    logger.error(
-                        f'{self.account.profile_number} Недостаточно средств для отправки транзакции')
-                    raise ValueError('Недостаточно средств для отправки нативного токена')
-
-            tx['value'] = amount.wei
+            tx_params = self._prepare_tx(amount, to_address)
+            self._validate_native_transfer_value(tx_params)
         else:
             # проверка наличия средств на балансе
             if balance.wei < amount.wei:
@@ -168,11 +176,11 @@ class Onchain:
             contract = self._get_contract(token)
             tx_params = self._prepare_tx()
             # создаем транзакцию
-            tx = contract.functions.transfer(to_address, amount.wei).build_transaction(tx_params)
+            tx_params = contract.functions.transfer(to_address, amount.wei).build_transaction(tx_params)
         # подписываем и отправляем транзакцию
 
-        self._estimate_gas(tx)
-        tx_hash = self._sign_and_send(tx)
+        self._estimate_gas(tx_params)
+        tx_hash = self._sign_and_send(tx_params)
         message = f' {amount} {token.symbol} на адрес {to_address}'
         logger.info(f'{self.account.profile_number} Транзакция отправлена [{message}] хэш: {tx_hash}')
         return tx_hash
@@ -222,7 +230,7 @@ class Onchain:
         return tx_params
 
 
-    def get_l1_fee(self, tx_params: dict[str, str | int]) -> Amount:
+    def _get_l1_fee(self, tx_params: dict[str, str | int]) -> Amount:
         """
         Получение комиссии для L1 сети Optimism
         :param tx_params: параметры транзакции
@@ -316,9 +324,9 @@ class Onchain:
         contract = self._get_contract(token)
         tx_params = self._prepare_tx()
 
-        tx = contract.functions.approve(spender, amount.wei).build_transaction(tx_params)
-        self._estimate_gas(tx)
-        self._sign_and_send(tx)
+        tx_params = contract.functions.approve(spender, amount.wei).build_transaction(tx_params)
+        self._estimate_gas(tx_params)
+        self._sign_and_send(tx_params)
         message = f'approve {amount} {token.symbol} to {spender}'
         logger.info(f'{self.account.profile_number} Транзакция отправлена {message}')
 

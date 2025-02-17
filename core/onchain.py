@@ -54,46 +54,6 @@ class Onchain:
         symbol = token_contract.functions.symbol().call()
         return symbol, decimals
 
-    def get_balance(
-            self,
-            *,
-            token: Optional[Token | str | ChecksumAddress] = None,
-            address: Optional[str | ChecksumAddress] = None
-    ) -> Amount:
-        """
-        Получение баланса кошелька в нативных или erc20 токенах, в формате Amount.
-        :param token: объект Token или адрес смарт контракта токена, если не указан, то нативный баланс
-        :param address: адрес кошелька, если не указан, то берется адрес аккаунта
-        :return: объект Amount с балансом
-        """
-
-        if token is None:
-            token = Tokens.NATIVE_TOKEN
-
-        # если не указан адрес, то берем адрес аккаунта
-        if not address:
-            address = self.account.address
-
-        # приводим адрес к формату checksum
-        address = to_checksum(address)
-
-        # если передан адрес контракта, то получаем параметры токена и создаем объект Token
-        if isinstance(token, str):
-            symbol, decimals = self._get_token_params(token)
-            token = Token(symbol, token, self.chain, decimals)
-
-        # если токен не передан или передан нативный токен
-        if token.type_token == TokenTypes.NATIVE:
-            # получаем баланс нативного токена
-            native_balance = self.w3.eth.get_balance(address)
-            balance = Amount(native_balance, wei=True)
-        else:
-            # получаем баланс erc20 токена
-            contract = self._get_contract(token)
-            erc20_balance_wei = contract.functions.balanceOf(address).call()
-            balance = Amount(erc20_balance_wei, decimals=token.decimals, wei=True)
-        return balance
-
     def _get_contract(self, contract_raw: ContractRaw) -> Contract:
         """
         Получение инициализированного объекта контракта
@@ -101,89 +61,6 @@ class Onchain:
         :return: объект контракта
         """
         return self.w3.eth.contract(contract_raw.address, abi=contract_raw.abi)
-
-
-    def _validate_native_transfer_value(self, tx_params: dict) -> None:
-        """
-        Проверка возможности отправки нативного токена
-        :param amount: сумма перевода
-        :param to_address: адрес получателя
-        """
-        l1_fee = self._get_l1_fee(tx_params)
-        gas_spend = self.w3.eth.estimate_gas({'from': self.account.address, 'to': self.account.address, 'value': 1})
-        fee_for_gas = tx_params.get('maxFeePerGas', tx_params.get('gasPrice'))
-        fee_spend = (l1_fee.wei + gas_spend * fee_for_gas) * get_multiplayer()
-        # проверка наличия средств на балансе
-        balance = self.get_balance()
-        if balance.wei - fee_spend - tx_params['value'] < 0:
-            message = f'баланс {self.chain.native_token}: {balance}, сумма: {tx_params["value"]}'
-            logger.warning(
-                f'{self.account.profile_number} Недостаточно средств для отправки транзакции, {message}'
-                f'Отправляем все доступные средства')
-            tx_params['value'] = balance.wei - fee_spend
-            if tx_params['value'] < 0:
-                logger.error(
-                    f'{self.account.profile_number} Недостаточно средств для отправки транзакции')
-                raise ValueError('Недостаточно средств для отправки нативного токена')
-
-
-
-    def send_token(self,
-                   amount: Amount | int | float,
-                   *,
-                   to_address: str | ChecksumAddress,
-                   token: Optional[Token | str | ChecksumAddress] = None
-                   ) -> str:
-        """
-        Отправка любых типов токенов, если не указан токен или адрес контракта токена, то отправка нативного токена
-        :param amount: сумма перевода, может быть объектом Amount, int или float
-        :param to_address: адрес получателя
-        :param token: объект Token или адрес контракта токена, если оставить пустым будет отправлен нативный токен
-        :return: хэш транзакции
-        """
-
-        # если не передан токен, то отправляем нативный токен
-        if token is None:
-            token = Tokens.NATIVE_TOKEN
-            token.chain = self.chain
-            token.symbol = self.chain.native_token
-
-        # приводим адрес к формату checksum
-        to_address = to_checksum(to_address)
-
-        # получаем баланс кошелька
-        balance = self.get_balance(token=token)
-
-        # если передан адрес контракта, то получаем параметры токена и создаем объект Token
-        if isinstance(token, str):
-            symbol, decimals = self._get_token_params(token)
-            token = Token(symbol, token, self.chain, decimals)
-
-        # если передана сумма в виде числа, то создаем объект Amount
-        if not isinstance(amount, Amount):
-            amount = Amount(amount, decimals=token.decimals)
-
-        # если передан нативный токен
-        if token.type_token == TokenTypes.NATIVE:
-            tx_params = self._prepare_tx(amount, to_address)
-            self._validate_native_transfer_value(tx_params)
-        else:
-            # проверка наличия средств на балансе
-            if balance.wei < amount.wei:
-                # если недостаточно средств, отправляем все доступные
-                amount = balance
-            # получаем контракт токена
-            contract = self._get_contract(token)
-            tx_params = self._prepare_tx()
-            # создаем транзакцию
-            tx_params = contract.functions.transfer(to_address, amount.wei).build_transaction(tx_params)
-        # подписываем и отправляем транзакцию
-
-        self._estimate_gas(tx_params)
-        tx_hash = self._sign_and_send(tx_params)
-        message = f' {amount} {token.symbol} на адрес {to_address}'
-        logger.info(f'{self.account.profile_number} Транзакция отправлена [{message}] хэш: {tx_hash}')
-        return tx_hash
 
     def _estimate_gas(self, tx: dict) -> None:
         """
@@ -228,7 +105,6 @@ class Onchain:
         tx_params['maxPriorityFeePerGas'] = priority_fee
 
         return tx_params
-
 
     def _get_l1_fee(self, tx_params: dict[str, str | int]) -> Amount:
         """
@@ -281,6 +157,139 @@ class Onchain:
 
         return tx_params
 
+    def _sign_and_send(self, tx: dict) -> str:
+        """
+        Подпись и отправка транзакции
+        :param tx: параметры транзакции
+        :return: хэш транзакции
+        """
+        signed_tx = self.w3.eth.account.sign_transaction(tx, self.account.private_key)
+        tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        return tx_receipt['transactionHash'].hex()
+
+    def get_balance(
+            self,
+            *,
+            token: Optional[Token | str | ChecksumAddress] = None,
+            address: Optional[str | ChecksumAddress] = None
+    ) -> Amount:
+        """
+        Получение баланса кошелька в нативных или erc20 токенах, в формате Amount.
+        :param token: объект Token или адрес смарт контракта токена, если не указан, то нативный баланс
+        :param address: адрес кошелька, если не указан, то берется адрес аккаунта
+        :return: объект Amount с балансом
+        """
+
+        if token is None:
+            token = Tokens.NATIVE_TOKEN
+
+        # если не указан адрес, то берем адрес аккаунта
+        if not address:
+            address = self.account.address
+
+        # приводим адрес к формату checksum
+        address = to_checksum(address)
+
+        # если передан адрес контракта, то получаем параметры токена и создаем объект Token
+        if isinstance(token, str):
+            symbol, decimals = self._get_token_params(token)
+            token = Token(symbol, token, self.chain, decimals)
+
+        # если токен не передан или передан нативный токен
+        if token.type_token == TokenTypes.NATIVE:
+            # получаем баланс нативного токена
+            native_balance = self.w3.eth.get_balance(address)
+            balance = Amount(native_balance, wei=True)
+        else:
+            # получаем баланс erc20 токена
+            contract = self._get_contract(token)
+            erc20_balance_wei = contract.functions.balanceOf(address).call()
+            balance = Amount(erc20_balance_wei, decimals=token.decimals, wei=True)
+        return balance
+
+    def _validate_native_transfer_value(self, tx_params: dict) -> None:
+        """
+        Проверка возможности отправки нативного токена и корректировка суммы перевода, если недостаточно средств
+        :param tx_params: параметры транзакции c указанным value
+        """
+        l1_fee = self._get_l1_fee(tx_params)
+        gas_spend = self.w3.eth.estimate_gas(
+            {'from': self.account.address, 'to': self.account.address, 'value': 1})
+        fee_for_gas = tx_params.get('maxFeePerGas', tx_params.get('gasPrice'))
+        fee_spend = (l1_fee.wei + gas_spend * fee_for_gas) * get_multiplayer()
+
+        # проверка наличия средств на балансе
+        balance = self.get_balance()
+        if balance.wei - fee_spend - tx_params.get('value', 0) > 0:
+            return
+
+        message = f'баланс {self.chain.native_token}: {balance}, сумма: {tx_params.get("value", 0)}'
+        logger.warning(
+            f'{self.account.profile_number} Недостаточно средств для отправки транзакции, {message}'
+            f'Отправляем все доступные средства')
+        tx_params['value'] = balance.wei - fee_spend
+        if tx_params['value'] > 0:
+            return
+        logger.error(f'{self.account.profile_number} Недостаточно средств для отправки транзакции')
+        raise ValueError('Недостаточно средств для отправки нативного токена')
+
+    def send_token(self,
+                   amount: Amount | int | float,
+                   *,
+                   to_address: str | ChecksumAddress,
+                   token: Optional[Token | str | ChecksumAddress] = None
+                   ) -> str:
+        """
+        Отправка любых типов токенов, если не указан токен или адрес контракта токена, то отправка нативного токена,
+        если при отправке токена не хватает средств, то отправляется все доступное количество.
+        :param amount: сумма перевода, может быть объектом Amount, int или float
+        :param to_address: адрес получателя
+        :param token: объект Token или адрес контракта токена, если оставить пустым будет отправлен нативный токен
+        :return: хэш транзакции
+        """
+        # если не передан токен, то отправляем нативный токен
+        if token is None:
+            token = Tokens.NATIVE_TOKEN
+            token.chain = self.chain
+            token.symbol = self.chain.native_token
+
+        # приводим адрес к формату checksum
+        to_address = to_checksum(to_address)
+
+        # если передан адрес контракта, то получаем параметры токена и создаем объект Token
+        if isinstance(token, str):
+            symbol, decimals = self._get_token_params(token)
+            token = Token(symbol, token, self.chain, decimals)
+
+        # если передана сумма в виде числа, то создаем объект Amount
+        if not isinstance(amount, Amount):
+            amount = Amount(amount, decimals=token.decimals)
+
+        # если передан нативный токен
+        if token.type_token == TokenTypes.NATIVE:
+            tx_params = self._prepare_tx(amount, to_address)
+            self._validate_native_transfer_value(tx_params)
+        else:
+            # получаем баланс кошелька
+            balance = self.get_balance(token=token)
+            # проверка наличия средств на балансе
+            if balance.wei < amount.wei:
+                # если недостаточно средств, отправляем все доступные
+                amount = balance
+            # получаем контракт токена
+            contract = self._get_contract(token)
+            tx_params = self._prepare_tx()
+            # создаем транзакцию
+            tx_params = contract.functions.transfer(to_address, amount.wei).build_transaction(tx_params)
+        # подписываем и отправляем транзакцию
+
+        self._estimate_gas(tx_params)
+        tx_hash = self._sign_and_send(tx_params)
+        message = f' {amount} {token.symbol} на адрес {to_address}'
+        logger.info(f'{self.account.profile_number} Транзакция отправлена [{message}] хэш: {tx_hash}')
+        return tx_hash
+
     def _get_allowance(self, token: Token, spender: str | ChecksumAddress | ContractRaw) -> Amount:
         """
         Получение разрешенной суммы токенов на снятие
@@ -299,7 +308,7 @@ class Onchain:
         return Amount(allowance, decimals=token.decimals, wei=True)
 
     def approve(self, token: Optional[Token], amount: Amount | int | float,
-                 spender: str | ChecksumAddress | ContractRaw) -> None:
+                spender: str | ChecksumAddress | ContractRaw) -> None:
 
         """
         Одобрение транзакции на снятие токенов
@@ -329,17 +338,6 @@ class Onchain:
         self._sign_and_send(tx_params)
         message = f'approve {amount} {token.symbol} to {spender}'
         logger.info(f'{self.account.profile_number} Транзакция отправлена {message}')
-
-    def _sign_and_send(self, tx: dict) -> str:
-        """
-        Подпись и отправка транзакции
-        :param tx: параметры транзакции
-        :return: хэш транзакции
-        """
-        signed_tx = self.w3.eth.account.sign_transaction(tx, self.account.private_key)
-        tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
-        return tx_receipt.transactionHash.hex()
 
     def get_gas_price(self, gwei: bool = True) -> int:
         """

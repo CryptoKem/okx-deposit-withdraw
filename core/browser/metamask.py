@@ -1,3 +1,5 @@
+import re
+
 from loguru import logger
 from playwright.sync_api import Locator
 
@@ -142,7 +144,7 @@ class Metamask:
         except:
             logger.warning(
                 f'{self.ads.profile_number} в метамаске уже имеется счет, делаем сброс и импортируем новый')
-            self.ads.page.get_by_text('Forgot password?').click()
+            self.ads.page.get_by_text(re.compile('Забыли пароль|Forgot password')).click()
             for i, word in enumerate(seed_list):
                 self.ads.page.get_by_test_id(f'import-srp__srp-word-{i}').fill(word)
             self.ads.page.get_by_test_id('create-vault-password').fill(self.password)
@@ -163,7 +165,7 @@ class Metamask:
         self.ads.page.get_by_test_id('account-options-menu-button').click()
         self.ads.page.get_by_test_id('account-list-menu-details').click()
         address = self.ads.page.locator('.qr-code__address-segments').inner_text().replace('\n', '')
-        self.ads.page.locator('section').get_by_role('button', name='Close').first.click()
+        self.ads.page.locator('section').locator('//span[contains(@style, "close")]').click()
         return address
 
     def connect(self, locator: Locator, timeout: int = 30) -> None:
@@ -257,9 +259,7 @@ class Metamask:
         if enabled_networks.get_by_text(chain.metamask_name, exact=True).count():
             enabled_networks.get_by_text(chain.metamask_name, exact=True).click()
         else:
-            close_button = self.ads.page.locator('header').get_by_role('button', name='Close').or_(
-                self.ads.page.locator('header').get_by_role('button', name='Закрыть'))
-            close_button.first.click()
+            self.ads.page.locator('header').locator('//span[contains(@style, "close")]').click()
             self.set_chain(chain)
             self.select_chain(chain)
 
@@ -271,9 +271,9 @@ class Metamask:
         """
         self.ads.page.get_by_test_id('network-form-network-name').fill(chain.metamask_name)
         self.ads.page.get_by_test_id('test-add-rpc-drop-down').click()
-        self.ads.page.get_by_role('button', name='Add RPC URL').or_(self.ads.page.get_by_role('button', name='Добавить URL')).first.click()
+        self.ads.page.locator('section').get_by_role('button', name='RPC').filter(has_not=self.ads.page.locator('span')).click()
         self.ads.page.get_by_test_id('rpc-url-input-test').fill(chain.rpc)
-        self.ads.page.get_by_role('button', name='Add URL').click()
+        self.ads.page.locator('section').get_by_role('button', name='URL').click()
 
     def set_chain(self, chain: Chain) -> None:
         """
@@ -295,15 +295,14 @@ class Metamask:
         # заполняем chain_id и проверяем, есть ли уже сеть с таким id
         self.ads.page.get_by_test_id('network-form-chain-id').fill(str(chain.chain_id))
         # есть ли уже сеть с таким id
-        if self.ads.page.get_by_text('This Chain ID is currently used by the').count():
+        if self.ads.page.get_by_test_id('network-form-chain-id-error').count():
             # повторно заполняем поля
-            self.ads.page.get_by_role('button', name='edit the original network').click()
+            self.ads.page.get_by_test_id('network-form-chain-id-error').get_by_role('button').click()
             self._set_chain_data(chain)
 
         # заполняем оставшиеся поля
         self.ads.page.get_by_test_id('network-form-ticker-input').fill(chain.native_token)
-        self.ads.page.get_by_role('button', name='Save').or_(
-            self.ads.page.get_by_role('button', name='Сохранить')).click()
+        self.ads.page.locator('section').locator('div.networks-tab__network-form__footer').get_by_role('button').click()
 
     def change_chain_data(self, chain: Chain) -> None:
         """
@@ -325,7 +324,7 @@ class Metamask:
         if not self.ads.page.get_by_test_id(f'network-list-item-options-button-{hex_id}').count():
             logger.info(
                 f'{self.ads.profile_number} Сеть {chain.metamask_name} не найдена в списке установленных. Устанавливаем.')
-            self.ads.page.get_by_role('button', name='Close').first.click()
+            self.ads.page.locator('section').locator('//span[contains(@style, "close")]').click()
             self.set_chain(chain)
             return
 
@@ -356,8 +355,7 @@ class Metamask:
             self.ads.page.get_by_test_id('network-form-ticker-input').fill(chain.native_token)
 
         # Сохраняем изменения
-        self.ads.page.get_by_role('button', name='Save').or_(
-            self.ads.page.get_by_role('button', name='Сохранить')).click()
+        self.ads.page.locator('section').locator('div.networks-tab__network-form__footer').get_by_role('button').click()
         logger.info(f'{self.ads.profile_number} Данные сети {chain.metamask_name} успешно изменены')
 
     def universal_confirm(self, windows: int = 1, buttons: int = 1) -> None:

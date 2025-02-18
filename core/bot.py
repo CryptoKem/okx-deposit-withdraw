@@ -11,7 +11,7 @@ from config import config
 
 class Bot:
     def __init__(self, account: Account, chain: Chain = config.start_chain) -> None:
-        logger.info(f"{account.profile_number} Запуск профиля")
+        logger.info(f'{account.profile_number} Запуск профиля')
         self.chain = chain
         self.account = account
         self.ads = Ads(account)
@@ -24,14 +24,15 @@ class Bot:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.ads._close_browser()
+        self.ads.close_browser()
         if exc_type is None:
-            logger.success(f"{self.account.profile_number} Аккаунт завершен успешно")
+            logger.success(f'{self.account.profile_number} Аккаунт завершен успешно')
         elif issubclass(exc_type, TimeoutError):
-            logger.error(f"{self.account.profile_number} Аккаунт завершен по таймауту")
+            logger.error(f'{self.account.profile_number} Аккаунт завершен по таймауту')
         else:
-            if "object has no attribute 'page'" in str(exc_val):
-                logger.error(f"{self.account.profile_number} Аккаунт завершен с ошибкой, возможно вы выключили работу браузера и пытаетесь сделать логику работу с браузером. {exc_val}'")
+            if 'object has no attribute: page' in str(exc_val):
+                logger.error(f'{self.account.profile_number} Аккаунт завершен с ошибкой, возможно вы '
+                             f'выключили работу браузера и пытаетесь сделать логику работу с браузером. {exc_val}')
             else:
-                logger.critical(f"{self.account.profile_number} Аккаунт завершен с ошибкой {exc_val}")
+                logger.critical(f'{self.account.profile_number} Аккаунт завершен с ошибкой {exc_val}')
         return True

@@ -15,5 +15,5 @@ class WithdrawData:
             self.is_valid = True
 
     def __str__(self) -> str:
-        return f"address: {self.address}, token: {self.token}, amount: {self.amount}, chain: {self.chain}"
+        return f'address: {self.address}, token: {self.token}, amount: {self.amount}, chain: {self.chain}'
 

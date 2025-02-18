@@ -21,16 +21,16 @@ def disable_animations(bot: Bot):
         `;
         document.head.appendChild(styleSheet);
     ''')
-    print("✅ Анимации отключены, canvas скрыт.")
+    print('✅ Анимации отключены, canvas скрыт.')
 
 
 def intercept_requests(route):
-    if "https://tap.eclipse.xyz/api/user/points" in route.request.url:
+    if 'https://tap.eclipse.xyz/api/user/points' in route.request.url:
         if random.random() < 0.5:
-            print(f"❌ Саботирован запрос: {route.request.url}")
+            print(f'❌ Саботирован запрос: {route.request.url}')
             route.abort()
         else:
-            print(f"✅ Разрешен запрос: {route.request.url}")
+            print(f'✅ Разрешен запрос: {route.request.url}')
             route.continue_()
     else:
         route.continue_()
@@ -49,21 +49,21 @@ def override_setTimeout(bot: Bot):
             }
         };
     """)
-    print("✅ Перехватчик setTimeout установлен")
+    print('✅ Перехватчик setTimeout установлен')
 
 def poke_the_cow(bot: Bot):
 
     bot.ads.open_url('https://tap.eclipse.xyz/', wait_until='load', timeout=50)
 
     # Если первый вход, жмем 'I agree'
-    i_agree_popup = bot.ads.page.locator("""//p[text()="I agree to Eclipse's"]/preceding-sibling::div""")
+    i_agree_popup = bot.ads.page.locator("""//p[text()='I agree to Eclipse's']/preceding-sibling::div""")
     if bot.ads.wait_result(i_agree_popup, attempts=3):
         i_agree_popup.click()
         bot.ads.page.get_by_role('button', name='Continue').click()
 
     # Жмем 'I have a Turbo Tap account'
-    if bot.ads.wait_result("I have a Turbo Tap account", attempts=3):
-        bot.ads.page.get_by_text("I have a Turbo Tap account").click()
+    if bot.ads.wait_result('I have a Turbo Tap account', attempts=3):
+        bot.ads.page.get_by_text('I have a Turbo Tap account').click()
         bot.ads.page.get_by_test_id('wallet-icon-backpackeclipse').click()
         backpack_connect_button = bot.ads.page.get_by_test_id('select-hardware-wallet-connect-button')
         bot.backpack.connect(backpack_connect_button)
@@ -78,7 +78,7 @@ def poke_the_cow(bot: Bot):
     random_sleep(5, 7)
 
     # Проверяем все ли подключилось и логинимся, если нет
-    if not bot.ads.page.get_by_role('button', name='Connect Wallet').count() and bot.ads.wait_result("Loading", negative=True):
+    if not bot.ads.page.get_by_role('button', name='Connect Wallet').count() and bot.ads.wait_result('Loading', negative=True):
         # bot.ads.wait_result(cow_element)
         random_sleep()
         if bot.ads.page.get_by_role('button', name='Log in').count():
@@ -120,8 +120,8 @@ def poke_the_cow(bot: Bot):
     # bot.ads.human_like_clicks(cow_element, cliks)
 
     override_setTimeout(bot)
-    bot.ads.page.unroute("**/*")  # Очищаем предыдущие правила
-    bot.ads.page.route("**/*", intercept_requests)
+    bot.ads.page.unroute('**/*')  # Очищаем предыдущие правила
+    bot.ads.page.route('**/*', intercept_requests)
 
     done_clicks = 0
     double_click_chance = 0.3
@@ -139,9 +139,9 @@ def poke_the_cow(bot: Bot):
             # Случайная задержка перед кликом
             random_sleep(0.1, 0.2)
         except Exception as e:
-            print(f"Ошибка при клике: {e}")
+            print(f'Ошибка при клике: {e}')
 
-    bot.ads.page.unroute("**/*")  # Очищаем правила
+    bot.ads.page.unroute('**/*')  # Очищаем правила
 
     random_sleep(3, 5)
     # Снова считываем очки

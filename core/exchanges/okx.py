@@ -48,18 +48,18 @@ class Okx(AbsExchange):
         # подпись
         message = timestamp + method.upper() + request_path + body
         mac = hmac.new(
-            bytes(config.okx_secret_key_main, encoding="utf-8"),
-            bytes(message, encoding="utf-8"),
-            digestmod="sha256",
+            bytes(config.okx_secret_key_main, encoding='utf-8'),
+            bytes(message, encoding='utf-8'),
+            digestmod='sha256',
         )
-        signature = base64.b64encode(mac.digest()).decode("utf-8")
+        signature = base64.b64encode(mac.digest()).decode('utf-8')
 
         headers = {
-            "Content-Type": "application/json",
-            "OK-ACCESS-KEY": config.okx_api_key_main,
-            "OK-ACCESS-SIGN": signature,
-            "OK-ACCESS-TIMESTAMP": timestamp,
-            "OK-ACCESS-PASSPHRASE": config.okx_passphrase_main,
+            'Content-Type': 'application/json',
+            'OK-ACCESS-KEY': config.okx_api_key_main,
+            'OK-ACCESS-SIGN': signature,
+            'OK-ACCESS-TIMESTAMP': timestamp,
+            'OK-ACCESS-PASSPHRASE': config.okx_passphrase_main,
             'x-simulated-trading': '0'
         }
         return headers
@@ -76,8 +76,8 @@ class Okx(AbsExchange):
         response = requests.get(url, headers=headers, proxies=self._proxies)
         response.raise_for_status()
         response_json = response.json()
-        if response_json.get("code") != "0":
-            raise HTTPError('status =! 0 ' + response_json.get("msg"))
+        if response_json.get('code') != '0':
+            raise HTTPError('status =! 0 ' + response_json.get('msg'))
         return response_json
 
     def _post_request(self, path: str, body: dict | None = None) -> dict:
@@ -93,8 +93,8 @@ class Okx(AbsExchange):
         response = requests.post(url, headers=headers, json=body, proxies=self._proxies)
         response.raise_for_status()
         response_json = response.json()
-        if response_json.get("code") != "0":
-            raise HTTPError('status =! 0 ' + response_json.get("msg"))
+        if response_json.get('code') != '0':
+            raise HTTPError('status =! 0 ' + response_json.get('msg'))
         return response_json
 
     def get_chains(self) -> list[str]:
@@ -107,22 +107,22 @@ class Okx(AbsExchange):
             path = '/api/v5/asset/currencies'
             try:
                 response_json = self._get_request(path)
-                chains_data = response_json.get("data")
+                chains_data = response_json.get('data')
 
                 for chain in chains_data:
-                    if chain.get("chain"):
-                        chain = chain.get("chain").split("-")[1]
+                    if chain.get('chain'):
+                        chain = chain.get('chain').split('-')[1]
                         self._chains.add(chain)
                 self._chains = list(self._chains)
 
             except RequestException as error:
-                logger.error(f"{self.account.profile_number} Ошибка запроса, не удалось получить список сетей с биржи OKX: {error}")
+                logger.error(f'{self.account.profile_number} Ошибка запроса, не удалось получить список сетей с биржи OKX: {error}')
             except json.JSONDecodeError as error:
-                logger.error(f"{self.account.profile_number} Не удалось распарсить ответ биржи OKX: {error}")
+                logger.error(f'{self.account.profile_number} Не удалось распарсить ответ биржи OKX: {error}')
             except Exception as error:
-                logger.error(f"{self.account.profile_number} Не удалось получить список сетей с биржи OKX: {error}")
+                logger.error(f'{self.account.profile_number} Не удалось получить список сетей с биржи OKX: {error}')
             else:
-                logger.info(f"{self.account.profile_number} Список сетей с биржи OKX: {self._chains}")
+                logger.info(f'{self.account.profile_number} Список сетей с биржи OKX: {self._chains}')
         return self._chains
 
     def check_chain(self, chain: Chain | str) -> bool:
@@ -133,7 +133,7 @@ class Okx(AbsExchange):
         """
         if isinstance(chain, Chain):
             if not chain.okx_name:
-                logger.warning(f"{self.account.profile_number} [OKX] -> у сети {chain.name} нет названия для OKX")
+                logger.warning(f'{self.account.profile_number} [OKX] -> у сети {chain.name} нет названия для OKX')
                 return False
             chain = chain.okx_name
         chains = self.get_chains()
@@ -175,7 +175,6 @@ class Okx(AbsExchange):
 
         path = '/api/v5/asset/withdrawal'
 
-
         wd = self._validate_inputs(token, amount, chain, address)
 
         token_with_chain = f'{wd.token}-{wd.chain}'
@@ -192,7 +191,7 @@ class Okx(AbsExchange):
         logger.info(f'{self.account.profile_number}: Выводим {message}')
         try:
             response_json = self._post_request(path, body)
-            withdraw_id = response_json.get("data")[0].get("wdId")
+            withdraw_id = response_json.get('data')[0].get('wdId')
             self._wait_until_withdraw_complete(withdraw_id)
             logger.info(f'{self.account.profile_number}: успешно выведено {message}')
         except RequestException as error:
@@ -216,7 +215,7 @@ class Okx(AbsExchange):
 
         for _ in range(timeout):
             response_json = self._get_request(path)
-            status = str(response_json.get("data", [{}])[0].get("state", -4))
+            status = str(response_json.get('data', [{}])[0].get('state', -4))
             match status:
                 case '2': # успешно
                     return

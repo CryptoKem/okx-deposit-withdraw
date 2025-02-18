@@ -83,28 +83,36 @@ class Onchain:
         fee_history = None
 
         if self.chain.is_eip1559 is None:
-            fee_history = self.w3.eth.fee_history(10, 'latest', [20])
+            fee_history = self.w3.eth.fee_history(20, 'latest', [40])
             self.chain.is_eip1559 = any(fee_history.get('baseFeePerGas', [0]))
 
         if self.chain.is_eip1559 is False:
             tx_params['gasPrice'] = int(self.w3.eth.gas_price * get_multiplayer())
             return tx_params
 
-        fee_history = fee_history or self.w3.eth.fee_history(10, 'latest', [20])
+        fee_history = fee_history or self.w3.eth.fee_history(20, 'latest', [40])
         base_fee = fee_history.get('baseFeePerGas', [0])[-1]
-        priority_fees = [priority_fee[0] for priority_fee in fee_history.get('reward', [[0]])]
+        priority_fees = [fee[0] for fee in fee_history.get('reward', [[0]]) if fee[0] != 0] or [0]
         median_index = len(priority_fees) // 2
         priority_fees.sort()
         median_priority_fee = priority_fees[median_index]
 
-        priority_fee = int(median_priority_fee * get_multiplayer())
-        max_fee = int((base_fee + priority_fee) * get_multiplayer())
+        priority_fee = self._multiply(median_priority_fee)
+        max_fee = self._multiply(base_fee + priority_fee)
 
-        tx_params['type'] = 2
+        tx_params['type'] = '0x2'
         tx_params['maxFeePerGas'] = max_fee
         tx_params['maxPriorityFeePerGas'] = priority_fee
 
         return tx_params
+
+    def _multiply(self, value: int, min_mult: float = 1.03, max_mult: float = 1.1) -> int:
+        """
+        Умножение значения газа на переданный множитель и множитель сети
+        :param value: значение
+        :return: умноженное значение
+        """
+        return int(value * get_multiplayer(min_mult, max_mult) * self.chain.multiple)
 
     def _get_l1_fee(self, tx_params: dict[str, str | int]) -> Amount:
         """
@@ -211,40 +219,39 @@ class Onchain:
     def _validate_native_transfer_value(self, tx_params: dict) -> None:
         """
         Проверка возможности отправки нативного токена и корректировка суммы перевода, если недостаточно средств
+        в исходном словаре tx_params
         :param tx_params: параметры транзакции c указанным value
         """
         amount = Amount(tx_params['value'], wei=True)
         l1_fee = self._get_l1_fee(tx_params)
-        gas_spend = self.w3.eth.estimate_gas(
+        gues_gas = self.w3.eth.estimate_gas(
             {'from': self.account.address, 'to': self.account.address, 'value': 1})
-        fee_for_gas = tx_params.get('maxFeePerGas', tx_params.get('gasPrice'))
-        fee_spend = (l1_fee.wei + gas_spend * fee_for_gas) * get_multiplayer(1.1, 1.2)
-
-        # проверка наличия средств на балансе
+        gues_gas_price = tx_params.get('maxFeePerGas', tx_params.get('gasPrice'))
+        fee_spend = self._multiply(l1_fee.wei + gues_gas * gues_gas_price, 1.1, 1.2)
         balance = self.get_balance()
         if balance.wei - fee_spend - amount.wei > 0:
             return
 
-        message = f'баланс {self.chain.native_token}: {balance}, сумма: {amount}'
+        message = f'баланс {self.chain.native_token}: {balance}, сумма: {amount} to {tx_params["to"]}'
         logger.warning(
             f'{self.account.profile_number} Недостаточно средств для отправки транзакции, {message}'
             f'Отправляем все доступные средства')
-        tx_params['value'] = int(balance.wei - (fee_spend * get_multiplayer(1.1, 1.2)))
+        tx_params['value'] = int(balance.wei -  self._multiply(fee_spend, 1.1, 1.2))
         if tx_params['value'] > 0:
             return
         logger.error(f'{self.account.profile_number} Недостаточно средств для отправки транзакции')
         raise ValueError('Недостаточно средств для отправки нативного токена')
 
     def send_token(self,
-                   amount: Amount | int | float,
-                   *,
                    to_address: str | ChecksumAddress,
+                   amount: Amount | int | float | None = None,
                    token: Optional[Token | str | ChecksumAddress] = None
                    ) -> str:
         """
         Отправка любых типов токенов, если не указан токен или адрес контракта токена, то отправка нативного токена,
         если при отправке токена не хватает средств, то отправляется все доступное количество.
-        :param amount: сумма перевода, может быть объектом Amount, int или float
+        Если не передана сумма, отправляются все доступные токены.
+        :param amount: сумма перевода, может быть объектом Amount, int, float или None
         :param to_address: адрес получателя
         :param token: объект Token или адрес контракта токена, если оставить пустым будет отправлен нативный токен
         :return: хэш транзакции
@@ -254,6 +261,9 @@ class Onchain:
             token = Tokens.NATIVE_TOKEN
             token.chain = self.chain
             token.symbol = self.chain.native_token
+
+        if amount is None:
+            amount = Amount(self.get_balance(token=token).wei, decimals=token.decimals, wei=True)
 
         # приводим адрес к формату checksum
         to_address = to_checksum(to_address)
@@ -284,11 +294,11 @@ class Onchain:
             tx_params = self._prepare_tx()
             # создаем транзакцию
             tx_params = contract.functions.transfer(to_address, amount.wei).build_transaction(tx_params)
-        # подписываем и отправляем транзакцию
 
         self._estimate_gas(tx_params)
+        # подписываем и отправляем транзакцию
         tx_hash = self._sign_and_send(tx_params)
-        message = f' {amount} {token.symbol} на адрес {to_address}'
+        message = f' {amount} {token.symbol} на адрес {to_address} '
         logger.info(f'{self.account.profile_number} Транзакция отправлена [{message}] хэш: {tx_hash}')
         return tx_hash
 

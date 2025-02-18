@@ -67,7 +67,7 @@ class Binance(AbsExchange):
             response_json = response.json()
             return response_json
         except RequestException as error:
-            logger.error(f"{self.account.profile_number} Ошибка запроса к бирже Binance: {error}, {response.text}")
+            logger.error(f'{self.account.profile_number} Ошибка запроса к бирже Binance: {error}, {response.text}')
             raise error
 
 
@@ -89,7 +89,7 @@ class Binance(AbsExchange):
             response_json = response.json()
             return response_json
         except RequestException as error:
-            logger.error(f"{self.account.profile_number} Ошибка запроса к бирже Binance: {error}, {response.text}")
+            logger.error(f'{self.account.profile_number} Ошибка запроса к бирже Binance: {error}, {response.text}')
             raise error
 
 
@@ -112,14 +112,14 @@ class Binance(AbsExchange):
 
             except RequestException as error:
                 logger.error(
-                    f"{self.account.profile_number} Ошибка запроса, не удалось получить список сетей с биржи Binance: {error}")
+                    f'{self.account.profile_number} Ошибка запроса, не удалось получить список сетей с биржи Binance: {error}')
             except json.JSONDecodeError as error:
-                logger.error(f"{self.account.profile_number} Не удалось распарсить ответ биржи Binance: {error}")
+                logger.error(f'{self.account.profile_number} Не удалось распарсить ответ биржи Binance: {error}')
             except Exception as error:
                 logger.error(
-                    f"{self.account.profile_number} Не удалось получить список сетей с биржи Binance: {error}")
+                    f'{self.account.profile_number} Не удалось получить список сетей с биржи Binance: {error}')
             else:
-                logger.info(f"{self.account.profile_number} Список сетей с биржи Binance: {self._chains}")
+                logger.info(f'{self.account.profile_number} Список сетей с биржи Binance: {self._chains}')
         return self._chains
 
     def check_chain(self, chain: Chain | str) -> bool:
@@ -165,7 +165,7 @@ class Binance(AbsExchange):
         logger.info(f'{self.account.profile_number}: Выводим {message}')
         try:
             response_json = self._post_request(path, params)
-            withdraw_id = response_json.get("id")
+            withdraw_id = response_json.get('id')
             self._wait_until_withdraw_complete(withdraw_id)
             logger.info(f'{self.account.profile_number}: успешно выведено {message}')
         except RequestException as error:

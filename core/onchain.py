@@ -112,7 +112,7 @@ class Onchain:
         :param value: значение
         :return: умноженное значение
         """
-        return int(value * get_multiplayer(min_mult, max_mult) * self.chain.multiple)
+        return int(value * get_multiplayer(min_mult, max_mult) * self.chain.multiplier)
 
     def _get_l1_fee(self, tx_params: dict[str, str | int]) -> Amount:
         """

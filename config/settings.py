@@ -49,10 +49,13 @@ class Config:
     # поставьте True, если используете мобильный прокси
     is_mobile_proxy = False
     # адрес для запроса смены ip адреса мобильного прокси
-    link_change_ip = ""
+    link_change_ip = ''
 
     # в какой сети работает в ончейн (не относится к метамаску)
     start_chain = Chains.ARBITRUM_ONE
+
+    # использовать ли прокси аккаунта для подключения к rpc провайдеру
+    is_web3_proxy = False
 
     # лимит газа для метода ожидания нужного газа gas_price_wait
     gas_price_limit = 60
@@ -60,26 +63,26 @@ class Config:
     # id чата в телеграме, куда отправлять сообщения
     chat_id = '12345678'
     # типы логов для отправки в телеграм
-    alert_types = ["CRITICAL", "SUCCESS"]  # "ERROR", "WARNING", "INFO", "DEBUG"
+    alert_types = ['CRITICAL', 'SUCCESS']  # 'ERROR', 'WARNING', 'INFO', 'DEBUG'
 
     # адрес расширения в браузере ADS
-    metamask_url = "chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html"
+    metamask_url = 'chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html'
 
     # ниже системные переменные, не меняйте их
-    bot_token = os.getenv("BOT_TOKEN")
+    bot_token = os.getenv('BOT_TOKEN')
 
-    okx_api_key_main = os.getenv("OKX_API_KEY_MAIN")
-    okx_secret_key_main = os.getenv("OKX_SECRET_KEY_MAIN")
-    okx_passphrase_main = os.getenv("OKX_PASSPHRASE_MAIN")
+    okx_api_key_main = os.getenv('OKX_API_KEY_MAIN')
+    okx_secret_key_main = os.getenv('OKX_SECRET_KEY_MAIN')
+    okx_passphrase_main = os.getenv('OKX_PASSPHRASE_MAIN')
 
-    binance_api_key = os.getenv("BINANCE_API_KEY")
-    binance_secret_key = os.getenv("BINANCE_SECRET_KEY")
+    binance_api_key = os.getenv('BINANCE_API_KEY')
+    binance_secret_key = os.getenv('BINANCE_SECRET_KEY')
 
     PATH_CONFIG = os.path.join(os.getcwd(), 'config')
-    PATH_DATA = os.path.join(PATH_CONFIG, "data")
-    PATH_ABI = os.path.join(PATH_DATA, "ABIs")
-    PATH_LOG = os.path.join(os.getcwd(), "logs")
-    PATH_EXCEL = os.path.join(PATH_DATA, "accounts.xlsx")
+    PATH_DATA = os.path.join(PATH_CONFIG, 'data')
+    PATH_ABI = os.path.join(PATH_DATA, 'ABIs')
+    PATH_LOG = os.path.join(os.getcwd(), 'logs')
+    PATH_EXCEL = os.path.join(PATH_DATA, 'accounts.xlsx')
 
 
 config = Config()

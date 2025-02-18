@@ -16,11 +16,11 @@ def filter_record(record: dict) -> bool:
     """
 
     if config.chat_id and config.bot_token:
-        if record["level"].name in config.alert_types:
-            send_telegram_message(record["message"])
+        if record['level'].name in config.alert_types:
+            send_telegram_message(record['message'])
 
-        if record["extra"].get("telegram"):
-            send_telegram_message(record["message"])
+        if record['extra'].get('telegram'):
+            send_telegram_message(record['message'])
 
     return True  # Продолжаем обработку логов
 
@@ -29,9 +29,9 @@ def init_logger():
     logger.remove()
     logger.add(
         sys.stdout,
-        level="INFO",
+        level='INFO',
         colorize=True,
-        format="<light-cyan>{time:DD-MM HH:mm:ss}</light-cyan> | <level> {level: <8} </level><white> {file}:{function}: {line}</white> - <light-white>{message}</light-white>",
+        format='<light-cyan>{time:DD-MM HH:mm:ss}</light-cyan> | <level> {level: <8} </level><white> {file}:{function}: {line}</white> - <light-white>{message}</light-white>',
         filter=filter_record
     )
     log_path = os.path.join(config.PATH_LOG, 'logs.log')
@@ -39,7 +39,7 @@ def init_logger():
         log_path,
         level='DEBUG',
         rotation=datetime.timedelta(days=1),
-        format="<light-cyan>{time:DD-MM HH:mm:ss}</light-cyan> | <level> {level: <8} </level><white> {file}:{function}: {line}</white> - <light-white>{message}</light-white>",
+        format='<light-cyan>{time:DD-MM HH:mm:ss}</light-cyan> | <level> {level: <8} </level><white> {file}:{function}: {line}</white> - <light-white>{message}</light-white>',
         retention='15 days'
     )
 

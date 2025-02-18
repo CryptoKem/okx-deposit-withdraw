@@ -81,13 +81,13 @@ class Excel:
         :return: None
         """
         table = Workbook()  # Создаем новую таблицу
-        table.active["A1"] = "Profile Number"  # Заполняем ячейки
+        table.active['A1'] = 'Profile Number'  # Заполняем ячейки
         if self._file == config.PATH_EXCEL:
-            table.active["B1"] = "Address"  # Заполняем ячейки
-            table.active["C1"] = "Password"  # Заполняем ячейки
-            table.active["D1"] = "Seed"  # Заполняем ячейки
-            table.active["E1"] = "Private Key"  # Заполняем ячейки
-            table.active["F1"] = "Proxy"  # Заполняем ячейки
+            table.active['B1'] = 'Address'  # Заполняем ячейки
+            table.active['C1'] = 'Password'  # Заполняем ячейки
+            table.active['D1'] = 'Seed'  # Заполняем ячейки
+            table.active['E1'] = 'Private Key'  # Заполняем ячейки
+            table.active['F1'] = 'Proxy'  # Заполняем ячейки
         table.save(self._file)  # Сохраняем таблицу
         return table
 
@@ -150,7 +150,7 @@ class Excel:
             for cell in row:
                 if cell.value == column_name:
                     return cell.column
-        logger.warning(f"{self.account.profile_number} Столбец '{column_name}' не найден, создаем новый.")
+        logger.warning(f'{self.account.profile_number} Столбец {column_name} не найден, создаем новый.')
         return self.add_column(column_name)
 
     def get_cell(self, column_name: str, row: Optional[int] = None) -> str | int | None:
@@ -221,7 +221,7 @@ class Excel:
                 cell.value = float(cell.value)
                 self._table.save(self._file)
             else:
-                raise TypeError(f"Значение в столбце '{column_name}' не является числом")
+                raise TypeError(f'Значение в столбце {column_name} не является числом')
 
         return cell.value
 
@@ -230,7 +230,7 @@ class Excel:
         Увеличивает значение счетчика на 1 или на указанное число. Если столбец не существует, создает его.
         Если ячейка пустая, устанавливает значение 0 и увеличивает на 1 или на указанное число.
         :param column_name: имя столбца
-        :param number: на сколько увеличить
+        :param row: номер строки, если не указан, то берется строка аккаунта
         :return: результирующее значение в ячейке
         """
         row = self.acc_row if not row else row
@@ -244,7 +244,7 @@ class Excel:
             if cell.value.isdigit():
                 cell.value = int(cell.value)
             else:
-                raise TypeError(f"Значение в столбце '{column_name}' не является числом")
+                raise TypeError(f'Значение в столбце {column_name} не является числом')
 
         cell.value += number
         self._table.save(self._file)
@@ -271,6 +271,7 @@ class Excel:
         Не указывайте столбец, где есть что-либо кроме даты, иначе получите ошибку.
         Формат даты настраивается в файле config/settings.py
         :param column_name: имя столбца
+        :param row: номер строки, если не указан, то берется строка аккаунта
         :return: значение ячейки
         """
         row = self.acc_row if not row else row
@@ -282,7 +283,7 @@ class Excel:
             date_object = datetime.strptime(date_str, config.date_format)
             return date_object
         logger.error(
-            f"{self.account.profile_number} Не нашли дату в столбце '{column_name}'  возвращаем старую дату")
+            f'{self.account.profile_number} Не нашли дату в столбце {column_name} возвращаем старую дату')
         return datetime.now().replace(year=2000)
 
     def get_counters(self, column_name: str) -> list[int | float]:

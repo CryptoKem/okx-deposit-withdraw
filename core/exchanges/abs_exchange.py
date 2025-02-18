@@ -60,7 +60,7 @@ class AbsExchange(ABC):
         :param token: тикер токена
         :param chain: сеть в корректном формате для конкретной биржи
         :param amount: количество
-        :param to_address: адрес получателя, если не указан, то на адрес в account
+        :param address: адрес получателя, если не указан, то на адрес в account
         """
         pass
 
@@ -110,8 +110,8 @@ class AbsExchange(ABC):
         )
 
         if not withdraw_data.is_valid:
-            logger.error(f"{self.account.profile_number} [{self.__class__.__name__}] Переданы некорректные аргументы в withdraw(): {withdraw_data}")
-            raise ValueError(f"Переданы некорректные аргументы в {self.__class__.__name__}.withdraw()")
+            logger.error(f'{self.account.profile_number} [{self.__class__.__name__}] Переданы некорректные аргументы в withdraw(): {withdraw_data}')
+            raise ValueError(f'Переданы некорректные аргументы в {self.__class__.__name__}.withdraw()')
 
         return withdraw_data
 
@@ -134,6 +134,6 @@ class AbsExchange(ABC):
 
             if chain_name is None:
                 logger.error(
-                    f"{self.account.profile_number} [{self.__class__.__name__}] Вывод невозможен, у сети {chain.name} нет названия для")
+                    f'{self.account.profile_number} [{self.__class__.__name__}] Вывод невозможен, у сети {chain.name} нет названия для')
             return chain_name
 

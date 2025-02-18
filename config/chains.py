@@ -28,6 +28,9 @@ class Chains:
     - is_eip1559: если сеть поддерживает EIP-1559, то True, иначе False, можно взять тут https://api.debank.com/chain/list
     - metamask_name: название сети в metamask, по умолчанию берется из параметра name
     - okx_name: название сети в OKX, список сетей можно получить запустив метод bot.okx.get_chains()
+    - binance_name: название сети в Binance, список сетей можно получить запустив метод bot.binance.get_chains()
+    - multiplier: множитель для увеличения комиссии, если транзакции не проходят из-за низкой комиссии, по умолчанию 1.0
+
 
     """
     # аргумент для хранения списка сетей
@@ -44,15 +47,16 @@ class Chains:
 
     LINEA = Chain(
         name='linea',
-        rpc='https://1rpc.io/linea',
+        rpc='https://rpc.ankr.com/linea/',
         chain_id=59144,
         metamask_name='Linea',
-        okx_name='Linea'
+        okx_name='Linea',
+        multiplier=1.5
     )
 
     ARBITRUM_ONE = Chain(
         name='arbitrum_one',
-        rpc='https://1rpc.io/arb',
+        rpc='https://rpc.ankr.com/arbitrum/',
         chain_id=42161,
         metamask_name='Arbitrum One',
         okx_name='Arbitrum One'
@@ -60,7 +64,7 @@ class Chains:
 
     BSC = Chain(
         name='bsc',
-        rpc='https://1rpc.io/bnb',
+        rpc='https://rpc.ankr.com/bsc/',
         chain_id=56,
         metamask_name='Binance Smart Chain',
         native_token='BNB',
@@ -78,7 +82,7 @@ class Chains:
 
     POLYGON = Chain(
         name='polygon',
-        rpc='https://1rpc.io/matic',
+        rpc='https://rpc.ankr.com/polygon/',
         chain_id=137,
         native_token='POL',
         metamask_name='Polygon',
@@ -96,7 +100,7 @@ class Chains:
 
     ZKSYNC = Chain(
         name='zksync',
-        rpc='https://1rpc.io/zksync2-era',
+        rpc='https://rpc.ankr.com/zksync_era/',
         chain_id=324,
         metamask_name='zkSync',
         okx_name='zkSync Era'
@@ -104,17 +108,23 @@ class Chains:
 
     CORE = Chain(
         name='core',
-        rpc='https://1rpc.io/core',
-        chain_id=324,
+        rpc='https://rpc.ankr.com/core/',
+        chain_id=1116,
         native_token='CORE',
         metamask_name='Core',
         okx_name='core'
     )
+
     SONEIUM = Chain(
         name='soneium',
         rpc='https://soneium.drpc.org',
         chain_id=1868,
         metamask_name='Soneium',
+    )
+    FTM = Chain(
+        name='ftm',
+        rpc='https://rpc.ankr.com/fantom/',
+        chain_id=250,
     )
 
     def __iter__(self) -> Iterator[Chain]:

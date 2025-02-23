@@ -1,4 +1,5 @@
 from config.chains import Chains
+from models.chain import Chain
 from models.contract_raw import ContractRaw
 
 
@@ -24,5 +25,31 @@ class Contracts:
         address='0x7160570bb153edd0ea1775ec2b2ac9b65f1ab61b',
         abi_name='taiko_ritsu_router',
         chain=Chains.ARBITRUM_ONE)
+
+    RELAY_SONEIUM = ContractRaw(
+        address='0x7f4babd2c7d35221e72ab67ea72cba99573a0089',
+        abi_name='relay',
+        chain=Chains.SONEIUM)
+
+    RELAY_ARBITRUM = ContractRaw(
+        address='0xa5f565650890fba1824ee0f21ebbbf660a179934',
+        abi_name='relay',
+        chain=Chains.ARBITRUM_ONE)
+
+
+    @classmethod
+    def get_contract_by_name(cls, name: str, chain: Chain):
+        """
+        Возвращает контракт по имени и сети
+        :param name: имя контракта
+        :param chain: сеть
+        :return: контракт
+        """
+        for contract in cls.__dict__.values():
+            if isinstance(contract, ContractRaw):
+                if contract.abi_name == name and contract.chain == chain:
+                    return contract
+        raise ValueError(f'Контракт {name} на сети {chain.name} не найден')
+
 
 

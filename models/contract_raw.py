@@ -6,6 +6,8 @@ from typing import Optional, TYPE_CHECKING
 
 from eth_typing import ChecksumAddress
 from loguru import logger
+from web3 import Web3
+from web3.contract import Contract
 
 from config.settings import config
 from utils.utils import to_checksum
@@ -51,6 +53,16 @@ class ContractRaw:
         """
         if not self._abi:
             path = os.path.join(config.PATH_ABI, f'{self.abi_name}.json')
-            with open(path, 'r') as file:
+            with open(path) as file:
                 self._abi = json.load(file)
         return self._abi
+
+
+    def get_contract_instance(self, w3: Web3) -> Contract:
+        """
+        Возвращает экземпляр контракта.
+        :param w3: экземпляр Web3
+        :return: экземпляр контракта
+        """
+        return w3.eth.contract(address=self.address, abi=self.abi)
+

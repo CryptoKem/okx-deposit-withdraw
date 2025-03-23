@@ -198,6 +198,7 @@ def write_text_to_file(path: str, text: str) -> None:
 def get_response(
         url: str,
         params: Optional[dict] = None,
+        proxies: Optional[dict] = None,
         attempts: int = 3,
         return_except: bool = True) -> Optional[dict]:
     """
@@ -210,6 +211,7 @@ def get_response(
     """
     for _ in range(attempts):
         try:
+            proxies = prepare_proxy_requests(proxies)
             response = requests.get(url, params=params)
             response.raise_for_status()
             return response.json()
@@ -230,18 +232,16 @@ def to_checksum(address: Optional[str | ChecksumAddress]) -> ChecksumAddress:
         address = Web3.to_checksum_address(address)
     return address
 
-
-def get_price_token(symbol: str) -> float:
+def get_price_token(symbol: str, proxy: str | None = None) -> float:
     """
-    Получает цену токена c binance по запросу к API https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}USDT.
+    Получает цену токена c binance по запросу к API https://api.binance.com/api/v3/ticker/price?symbol={symbol}USDT.
     :param symbol: тикер токена (например, ETH)
     :return: цена токена в USDT
     """
-
     # todo: добавить поддержку прокси
-    url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol.upper()}USDT"
-    response = get_response(url)
-    return float(response.get('weightedAvgPrice', 0))
+    url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol.upper()}USDT"
+    response = get_response(url, proxies=proxy)
+    return float(response["price"])
 
 
 def get_multiplayer(min_mult: float = 1.02, max_mult: float = 1.05) -> float:

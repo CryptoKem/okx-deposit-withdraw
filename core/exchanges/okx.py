@@ -334,7 +334,7 @@ class Okx(AbsExchange):
         Получает информацию о балансе финансового счета
         :return:  список словарей с информацией о балансе
         """
-        path = '/api/v5/asset/balance'
+        path = '/api/v5/asset/balances'
         response_json = self._get_request(path)
         return response_json.get('data', [{}])
 

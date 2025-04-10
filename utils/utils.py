@@ -205,20 +205,35 @@ def get_response(
     Делает get запрос и возвращает json из ответа
     :param url: ссылка для запроса
     :param params: параметры запроса
+    :param proxies: прокси для запроса
     :param attempts: количество попыток
     :param return_except: возвращать ли исключение
     :return: json из ответа
     """
+    response = None
+    proxies = prepare_proxy_requests(proxies)
     for _ in range(attempts):
         try:
-            proxies = prepare_proxy_requests(proxies)
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, proxies=proxies)
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            logger.error(f"Ошибка get запроса, {url} {params} - {e}")
+            error_text = f"Ошибка get запроса, {url} {params} - {e}"
+
+            # Добавляем текст ответа, если он есть
+            if response is not None and hasattr(response, 'text'):
+                error_text += f"\nОтвет сервера: {response.text[:500]}..." if len(
+                    response.text) > 500 else f"\nОтвет сервера: {response.text}"
+
+            logger.error(error_text)
+
     if return_except:
-        raise Exception(f"Ошибка get запроса, {url} {params}")
+        error_msg = f"Ошибка get запроса, {url} {params}"
+        if response is not None and hasattr(response, 'text'):
+            error_msg += f"\nОтвет сервера: {response.text[:500]}..." if len(
+                response.text) > 500 else f"\nОтвет сервера: {response.text}"
+        raise Exception(error_msg)
+
     return None
 
 

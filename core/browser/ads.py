@@ -67,7 +67,7 @@ class Ads:
         random_sleep(1, 2)
         try:
             data = get_response(url, params)
-            return data['data']['ws']['puppeteer']
+            return data.get('data', {}).get('ws', {}).get('puppeteer', '')
         except Exception as e:
             logger.error(f'{self.profile_number} Ошибка при открытии браузера: {e}')
             raise e
@@ -82,9 +82,9 @@ class Ads:
         random_sleep(1, 2)
         try:
             data = get_response(url, params)
-            if data['data']['status'] == 'Active':
+            if data.get('data', {}).get('status', '') == 'Active':
                 logger.info(f'{self.profile_number} Браузер уже активен')
-                return data['data']['ws']['puppeteer']
+                return data.get('data', {}).get('ws', {}).get('puppeteer', '')
             return None
         except Exception as e:
             logger.error(f'{self.profile_number} Ошибка при проверке статуса браузера (запущен ли ADS?: {e} ')
@@ -232,7 +232,7 @@ class Ads:
         random_sleep(1, 2)
         try:
             data = get_response(url, params)
-            return data['data']['list'][0]['user_id']
+            return data.get('data', {}).get('list', [{}])[0].get('user_id', '')
         except Exception as e:
             logger.error(f'{self.profile_number} Ошибка при получении id профиля: {e}')
             raise e

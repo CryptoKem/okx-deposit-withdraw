@@ -11,6 +11,8 @@ from typing import Optional, Any
 
 import requests
 from eth_typing import ChecksumAddress
+from requests.adapters import HTTPAdapter
+from urllib3 import Retry
 from web3 import Web3
 from loguru import logger
 
@@ -197,44 +199,109 @@ def write_text_to_file(path: str, text: str) -> None:
 
 def get_response(
         url: str,
-        params: Optional[dict] = None,
-        proxies: Optional[dict] = None,
+        params: dict | None = None,
+        proxies: dict | None = None,
+        headers: dict | None = None,
         attempts: int = 3,
-        return_except: bool = True) -> Optional[dict]:
+        return_except: bool = True) -> dict[str | dict | Any] | str | None:
     """
-    Делает get запрос и возвращает json из ответа
+    Делает GET запрос и возвращает результат в виде JSON или текста
     :param url: ссылка для запроса
-    :param params: параметры запроса
-    :param proxies: прокси для запроса
-    :param attempts: количество попыток
-    :param return_except: возвращать ли исключение
-    :return: json из ответа
+    :param params: параметры запроса в виде словаря
+    :param proxies: прокси для запроса в формате "ip:port:login:password"
+    :param headers: заголовки запроса в виде словаря
+    :param attempts: количество попыток выполнения запроса
+    :param return_except: если True - выбрасывает исключение при ошибке, если False - возвращает None
+    :return: словарь с данными JSON, строка с текстом ответа или None при ошибке
+    :raises: HTTPError, ConnectionError, Timeout, RequestException - если return_except=True
     """
-    response = None
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=attempts-1,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
     proxies = prepare_proxy_requests(proxies)
-    for _ in range(attempts):
+    headers = headers or {'User-Agent': get_user_agent(), 'Accept': 'application/json'}
+
+    try:
+        response = session.get(
+            url,
+            params=params,
+            headers=headers,
+            proxies=proxies)
+        response.raise_for_status()
         try:
-            response = requests.get(url, params=params, proxies=proxies)
-            response.raise_for_status()
             return response.json()
-        except Exception as e:
-            error_text = f"Ошибка get запроса, {url} {params} - {e}"
+        except ValueError as e:
+            warning_text = f"Ошибка парсинга json, {url} {params} {response.text if response else ''} - {e}"
+            logger.warning(warning_text)
+            content_preview = response.text[:500] + '...' if len(response.text) > 500 else response.text
+            logger.warning(f"Ответ сервера: {content_preview}")
+            return response.text
+    except requests.exceptions.HTTPError as e:
+        # Ошибки HTTP
+        status_code = e.response.status_code if hasattr(e, 'response') else "неизвестно"
+        error_msg = f"HTTP ошибка {status_code}: {url} - {e}"
+        logger.error(error_msg)
 
-            # Добавляем текст ответа, если он есть
-            if response is not None and hasattr(response, 'text'):
-                error_text += f"\nОтвет сервера: {response.text[:500]}..." if len(
-                    response.text) > 500 else f"\nОтвет сервера: {response.text}"
+        if hasattr(e, 'response') and e.response is not None:
+            content_preview = e.response.text[:500] + '...' if len(e.response.text) > 500 else e.response.text
+            logger.error(f"Ответ сервера: {content_preview}")
 
-            logger.error(error_text)
+        if return_except:
+            raise requests.exceptions.HTTPError(error_msg) from e
+        return None
 
-    if return_except:
-        error_msg = f"Ошибка get запроса, {url} {params}"
-        if response is not None and hasattr(response, 'text'):
-            error_msg += f"\nОтвет сервера: {response.text[:500]}..." if len(
-                response.text) > 500 else f"\nОтвет сервера: {response.text}"
-        raise Exception(error_msg)
+    except requests.exceptions.ConnectionError as e:
+        # Ошибки соединения
+        error_msg = f"Ошибка соединения: {url} - {e}"
+        logger.error(error_msg)
 
-    return None
+        if hasattr(e, 'response') and e.response is not None:
+            content_preview = e.response.text[:500] + '...' if len(e.response.text) > 500 else e.response.text
+            logger.error(f"Ответ сервера: {content_preview}")
+
+        if return_except:
+            raise requests.exceptions.ConnectionError(error_msg) from e
+        return None
+
+    except requests.exceptions.Timeout as e:
+        # Ошибки таймаута
+        error_msg = f"Превышено время ожидания: {url} - {e}"
+        logger.error(error_msg)
+        if hasattr(e, 'response') and e.response is not None:
+            content_preview = e.response.text[:500] + '...' if len(e.response.text) > 500 else e.response.text
+            logger.error(f"Ответ сервера: {content_preview}")
+        if return_except:
+            raise requests.exceptions.Timeout(error_msg) from e
+        return None
+
+    except requests.exceptions.RequestException as e:
+        # Любые другие ошибки запросов
+        error_msg = f"Ошибка запроса: {url} - {e}"
+        logger.error(error_msg)
+        if hasattr(e, 'response') and e.response is not None:
+            content_preview = e.response.text[:500] + '...' if len(e.response.text) > 500 else e.response.text
+            logger.error(f"Ответ сервера: {content_preview}")
+        if return_except:
+            raise requests.exceptions.RequestException(error_msg) from e
+        return None
+
+    except Exception as e:
+        error_msg = f"Ошибка запроса: {url} - {e}"
+        logger.error(error_msg)
+        if hasattr(e, 'response') and e.response is not None:
+            content_preview = e.response.text[:500] + '...' if len(e.response.text) > 500 else e.response.text
+            logger.error(f"Ответ сервера: {content_preview}")
+        if return_except:
+            raise requests.exceptions.RequestException(error_msg) from e
+        return None
 
 
 def to_checksum(address: Optional[str | ChecksumAddress]) -> ChecksumAddress:

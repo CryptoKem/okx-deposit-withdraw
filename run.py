@@ -158,15 +158,7 @@ def activity(bot: Bot):
          random_sleep(100,200)"""
 
 
-"""# Deposit OKX
-    sub = bot.excel.get_cell('sub_acc_okx')
-    bot.onchain.send_token(to_address=sub, amount=0.003)
-    logger.success("OKX deposit отправлен")
 
-    #Смена сети
-    onchain_zksync = Onchain(bot.account, Chains.ZKSYNC)
-    amount = onchain_zksync.get_balance(token=Tokens.USDT_ZKSYNC)
-    onchain_zksync.send_token(amount=amount, to_address=sub, token=Tokens.USDT_ZKSYNC)"""
 
 if __name__ == '__main__':
     try:

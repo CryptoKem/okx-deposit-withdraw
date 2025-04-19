@@ -29,6 +29,15 @@ class Tokens:
         decimals=6
     )
 
+    UNI_ETHEREUM = Token(
+        symbol='UNI',
+        address='0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984',
+        chain=Chains.ETHEREUM,
+        type_token=TokenTypes.ERC20,
+        decimals=18
+    )
+
+
     USDT_BSC = Token(
         symbol='USDT',
         address='0x55d398326f99059ff775485246999027b3197955',

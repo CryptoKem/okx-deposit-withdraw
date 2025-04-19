@@ -47,7 +47,7 @@ class Chains:
 
     LINEA = Chain(
         name='linea',
-        rpc='https://rpc.ankr.com/linea/',
+        rpc='https://1rpc.io/linea',
         chain_id=59144,
         metamask_name='Linea',
         okx_name='Linea',
@@ -56,7 +56,7 @@ class Chains:
 
     ARBITRUM_ONE = Chain(
         name='arbitrum_one',
-        rpc='https://rpc.ankr.com/arbitrum/',
+        rpc='https://1rpc.io/arb',
         chain_id=42161,
         metamask_name='Arbitrum One',
         okx_name='Arbitrum One'
@@ -64,7 +64,7 @@ class Chains:
 
     BSC = Chain(
         name='bsc',
-        rpc='https://rpc.ankr.com/bsc/',
+        rpc='https://1rpc.io/bnb',
         chain_id=56,
         metamask_name='Binance Smart Chain',
         native_token='BNB',

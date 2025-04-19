@@ -61,7 +61,7 @@ class Config:
     gas_price_limit = 60
 
     # id чата в телеграме, куда отправлять сообщения
-    chat_id = '12345678'
+    chat_id = '2031354862'
     # типы логов для отправки в телеграм
     alert_types = ['CRITICAL', 'SUCCESS']  # 'ERROR', 'WARNING', 'INFO', 'DEBUG'
 
